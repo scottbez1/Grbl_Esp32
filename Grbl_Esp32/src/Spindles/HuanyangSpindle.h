@@ -26,6 +26,7 @@ namespace Spindles {
     class Huanyang : public VFD {
     private:
         int reg;
+        uint16_t _actual_rpm   = 0;
 
     protected:
         void default_modbus_settings(uart_config_t& uart) override;
@@ -34,5 +35,6 @@ namespace Spindles {
         void set_speed_command(uint32_t rpm, ModbusCommand& data) override;
 
         response_parser get_status_ok(ModbusCommand& data) override;
+        response_parser get_current_rpm(ModbusCommand& data) override;
     };
 }

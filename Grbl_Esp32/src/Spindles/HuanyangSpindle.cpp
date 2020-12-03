@@ -176,4 +176,28 @@ namespace Spindles {
         }
         return [](const uint8_t* response, Spindles::VFD* vfd) -> bool { return true; };
     }
+
+    Huanyang::response_parser Huanyang::get_current_rpm(ModbusCommand& data) {
+        // NOTE: data length is excluding the CRC16 checksum.
+        data.tx_length = 6;
+        data.rx_length = 6;
+
+        // data.msg[0] is omitted (modbus address is filled in later)
+        data.msg[1] = 0x04;
+        data.msg[2] = 0x03;
+        data.msg[3] = 0x03; // RPM
+        data.msg[4] = 0x00;
+        data.msg[5] = 0x00;
+
+        return [](const uint8_t* response, Spindles::VFD* vfd) -> bool {
+            uint16_t rpm = (response[4] << 8) | response[5];
+            if (rpm != ((Huanyang*)vfd)->_actual_rpm) {
+                ((Huanyang*)vfd)->_actual_rpm = rpm;
+// #ifdef VFD_DEBUG_MODE
+                grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Spindle speed changed to %d", rpm);
+// #endif
+            }
+            return true;
+        };
+    }
 }

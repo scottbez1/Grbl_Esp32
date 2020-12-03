@@ -52,6 +52,10 @@
 #define VFD_RS485_TXD_PIN       GPIO_NUM_26
 #define VFD_RS485_RXD_PIN       GPIO_NUM_27
 #define VFD_RS485_RTS_PIN       GPIO_NUM_32
+#define VFD_RS485_ADDR          1
+
+// To debug RS485 spindle comms:
+#define VFD_DEBUG_MODE
 
 
 #define X_LIMIT_PIN             GPIO_NUM_34
