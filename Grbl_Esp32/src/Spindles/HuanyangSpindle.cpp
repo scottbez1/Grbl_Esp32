@@ -201,8 +201,12 @@ namespace Spindles {
 //         };
 //     }
 
-        bool Huanyang::get_current_rpm(uint32_t& rpm) {
+        bool Huanyang::read_status(uint32_t& configured_rpm, uint32_t& actual_rpm, SpindleState& configured_state, SpindleState& actual_state) {
             ModbusCommand data;
+            uint8_t response[16]; // Larger than any expected response
+
+
+            // Read status register for RPM
 
             // NOTE: data length is excluding the CRC16 checksum.
             data.tx_length = 6;
@@ -215,8 +219,9 @@ namespace Spindles {
             data.msg[4] = 0x00;
             data.msg[5] = 0x00;
 
-            uint8_t response[6];
-            if (send_command(data, response)) {
+            if (!send_command(data, response)) {
+                return false;
+            } else {
                 if (response[1] != 0x04) {
     #ifdef VFD_DEBUG_MODE
                     grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Incorrect function in response %d", response[1]);
@@ -228,16 +233,43 @@ namespace Spindles {
     #endif
                     return false;
                 }
-                rpm = (response[4] << 8) | response[5];
-                return true;
-            } else {
-                return false;
+                actual_rpm = (response[4] << 8) | response[5];
             }
-        };
 
 
-        bool Huanyang::get_current_state(SpindleState& state) {
-            ModbusCommand data;
+            // Read status register for set frequency (can be converted to RPM)
+
+            // NOTE: data length is excluding the CRC16 checksum.
+            data.tx_length = 6;
+            data.rx_length = 6;
+
+            // data.msg[0] is omitted (modbus address is filled in later)
+            data.msg[1] = 0x04;
+            data.msg[2] = 0x03;
+            data.msg[3] = 0x00; // Set Frequency
+            data.msg[4] = 0x00;
+            data.msg[5] = 0x00;
+
+            if (!send_command(data, response)) {
+                return false;
+            } else {
+                if (response[1] != 0x04) {
+    #ifdef VFD_DEBUG_MODE
+                    grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Incorrect function in response %d", response[1]);
+    #endif
+                    return false;
+                } else if (response[2] != 0x03) {
+    #ifdef VFD_DEBUG_MODE
+                    grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Incorrect length in response %d", response[2]);
+    #endif
+                    return false;
+                }
+                uint32_t configured_frequency_x100 = (response[4] << 8) | response[5];
+                configured_rpm = configured_frequency_x100 * 60 / 100;
+            }
+
+
+            // Read control register
 
             // NOTE: data length is excluding the CRC16 checksum.
             data.tx_length = 4;
@@ -248,8 +280,9 @@ namespace Spindles {
             data.msg[2] = 0x01;
             data.msg[3] = 0x00; // Empty control register
 
-            uint8_t response[4];
-            if (send_command(data, response)) {
+            if (!send_command(data, response)) {
+                return false;
+            } else {
                 if (response[1] != 0x03) {
     #ifdef VFD_DEBUG_MODE
                     grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Incorrect function in response %d", response[1]);
@@ -261,10 +294,27 @@ namespace Spindles {
     #endif
                     return false;
                 }
-                grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Got control response 0x%02x", response[3]);
-                return true;
-            } else {
-                return false;
+
+                uint8_t cnst = response[3];
+
+                // Configured state is based off the "run" bit and "r/f" bit
+                if (cnst & (1 << 0)) {
+                    configured_state = (cnst & (1 << 2)) ? SpindleState::Ccw : SpindleState::Cw;
+                } else {
+                    configured_state = SpindleState::Disable;
+                }
+
+                // Actual state is based off the "running" bit and "r/f" bit
+                if (cnst & (1 << 3)) {
+                    actual_state = (cnst & (1 << 2)) ? SpindleState::Ccw : SpindleState::Cw;
+                } else {
+                    actual_state = SpindleState::Disable;
+                }
+
             }
+
+
+            return true;
         };
+
 }

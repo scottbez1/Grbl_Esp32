@@ -67,31 +67,21 @@ namespace Spindles {
 
         while (true) {
             // Read status - determines healthy or not
-//             uint32_t current_rpm;
-//             bool got_current_rpm = instance->get_current_rpm(current_rpm);
-// #ifdef VFD_DEBUG_MODE
-//             if (got_current_rpm) {
-//                 grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "RS485 current rpm %d", current_rpm);
+            uint32_t configured_rpm;
+            uint32_t actual_rpm;
+            SpindleState configured_state;
+            SpindleState actual_state;
 
-//                 // TODO
-//                 // Lock
-//                 // update state vars
-//             }
-// #endif
-
-            SpindleState current_state;
-            bool got_current_state = instance->get_current_state(current_state);
+            bool got_status = instance->read_status(configured_rpm, actual_rpm, configured_state, actual_state);
 #ifdef VFD_DEBUG_MODE
-            if (got_current_state) {
-                // grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "RS485 current state %d", current_state);
+            if (got_status) {
+                grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "RS485 status: rpm=%d, arpm=%d, st=%d, ast=%d", configured_rpm, actual_rpm, configured_state, actual_state);
 
                 // TODO
                 // Lock
                 // update state vars
             }
 #endif
-
-            // SpindleState current_state;
             // bool got_current_state = instance->get_current_state(current_state);
 
             // bool got_configuration

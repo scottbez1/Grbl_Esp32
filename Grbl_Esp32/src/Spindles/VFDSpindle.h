@@ -79,8 +79,8 @@ namespace Spindles {
         // virtual response_parser get_max_rpm(ModbusCommand& data) { return nullptr; }
         // virtual response_parser get_current_direction(ModbusCommand& data) { return nullptr; }
         // virtual response_parser get_status_ok(ModbusCommand& data) = 0;
-        virtual bool get_current_rpm(uint32_t& rpm) { return false; }
-        virtual bool get_current_state(SpindleState& state) { return false; }
+        virtual bool read_status(uint32_t& configured_rpm, uint32_t& actual_rpm, SpindleState& configured_state, SpindleState& actual_state) { return false; };
+
 
     public:
         VFD()           = default;
