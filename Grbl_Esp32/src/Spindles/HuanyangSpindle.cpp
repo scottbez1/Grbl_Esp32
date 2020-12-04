@@ -157,47 +157,114 @@ namespace Spindles {
         data.msg[4] = (value & 0xFF);
     }
 
-    Huanyang::response_parser Huanyang::get_status_ok(ModbusCommand& data) {
-        // NOTE: data length is excluding the CRC16 checksum.
-        data.tx_length = 6;
-        data.rx_length = 6;
+//     Huanyang::response_parser Huanyang::get_status_ok(ModbusCommand& data) {
+//         // NOTE: data length is excluding the CRC16 checksum.
+//         data.tx_length = 6;
+//         data.rx_length = 6;
 
-        // data.msg[0] is omitted (modbus address is filled in later)
-        data.msg[1] = 0x04;
-        data.msg[2] = 0x03;
-        data.msg[3] = reg;
-        data.msg[4] = 0x00;
-        data.msg[5] = 0x00;
+//         // data.msg[0] is omitted (modbus address is filled in later)
+//         data.msg[1] = 0x04;
+//         data.msg[2] = 0x03;
+//         data.msg[3] = reg;
+//         data.msg[4] = 0x00;
+//         data.msg[5] = 0x00;
 
-        if (reg < 0x03) {
-            reg++;
-        } else {
-            reg = 0x00;
-        }
-        return [](const uint8_t* response, Spindles::VFD* vfd) -> bool { return true; };
-    }
+//         if (reg < 0x03) {
+//             reg++;
+//         } else {
+//             reg = 0x00;
+//         }
+//         return [](const uint8_t* response, Spindles::VFD* vfd) -> bool { return true; };
+//     }
 
-    Huanyang::response_parser Huanyang::get_current_rpm(ModbusCommand& data) {
-        // NOTE: data length is excluding the CRC16 checksum.
-        data.tx_length = 6;
-        data.rx_length = 6;
+//     Huanyang::response_parser Huanyang::get_current_rpm(ModbusCommand& data) {
+//         // NOTE: data length is excluding the CRC16 checksum.
+//         data.tx_length = 6;
+//         data.rx_length = 6;
 
-        // data.msg[0] is omitted (modbus address is filled in later)
-        data.msg[1] = 0x04;
-        data.msg[2] = 0x03;
-        data.msg[3] = 0x03; // RPM
-        data.msg[4] = 0x00;
-        data.msg[5] = 0x00;
+//         // data.msg[0] is omitted (modbus address is filled in later)
+//         data.msg[1] = 0x04;
+//         data.msg[2] = 0x03;
+//         data.msg[3] = 0x03; // RPM
+//         data.msg[4] = 0x00;
+//         data.msg[5] = 0x00;
 
-        return [](const uint8_t* response, Spindles::VFD* vfd) -> bool {
-            uint16_t rpm = (response[4] << 8) | response[5];
-            if (rpm != ((Huanyang*)vfd)->_actual_rpm) {
-                ((Huanyang*)vfd)->_actual_rpm = rpm;
-// #ifdef VFD_DEBUG_MODE
-                grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Spindle speed changed to %d", rpm);
-// #endif
+//         return [](const uint8_t* response, Spindles::VFD* vfd) -> bool {
+//             uint16_t rpm = (response[4] << 8) | response[5];
+//             if (rpm != ((Huanyang*)vfd)->_actual_rpm) {
+//                 ((Huanyang*)vfd)->_actual_rpm = rpm;
+// // #ifdef VFD_DEBUG_MODE
+//                 grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Spindle speed changed to %d", rpm);
+// // #endif
+//             }
+//             return true;
+//         };
+//     }
+
+        bool Huanyang::get_current_rpm(uint32_t& rpm) {
+            ModbusCommand data;
+
+            // NOTE: data length is excluding the CRC16 checksum.
+            data.tx_length = 6;
+            data.rx_length = 6;
+
+            // data.msg[0] is omitted (modbus address is filled in later)
+            data.msg[1] = 0x04;
+            data.msg[2] = 0x03;
+            data.msg[3] = 0x03; // RPM
+            data.msg[4] = 0x00;
+            data.msg[5] = 0x00;
+
+            uint8_t response[6];
+            if (send_command(data, response)) {
+                if (response[1] != 0x04) {
+    #ifdef VFD_DEBUG_MODE
+                    grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Incorrect function in response %d", response[1]);
+    #endif
+                    return false;
+                } else if (response[2] != 0x03) {
+    #ifdef VFD_DEBUG_MODE
+                    grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Incorrect length in response %d", response[2]);
+    #endif
+                    return false;
+                }
+                rpm = (response[4] << 8) | response[5];
+                return true;
+            } else {
+                return false;
             }
-            return true;
         };
-    }
+
+
+        bool Huanyang::get_current_state(SpindleState& state) {
+            ModbusCommand data;
+
+            // NOTE: data length is excluding the CRC16 checksum.
+            data.tx_length = 4;
+            data.rx_length = 4;
+
+            // data.msg[0] is omitted (modbus address is filled in later)
+            data.msg[1] = 0x03;
+            data.msg[2] = 0x01;
+            data.msg[3] = 0x00; // Empty control register
+
+            uint8_t response[4];
+            if (send_command(data, response)) {
+                if (response[1] != 0x03) {
+    #ifdef VFD_DEBUG_MODE
+                    grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Incorrect function in response %d", response[1]);
+    #endif
+                    return false;
+                } else if (response[2] != 0x01) {
+    #ifdef VFD_DEBUG_MODE
+                    grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Incorrect length in response %d", response[2]);
+    #endif
+                    return false;
+                }
+                grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Got control response 0x%02x", response[3]);
+                return true;
+            } else {
+                return false;
+            }
+        };
 }

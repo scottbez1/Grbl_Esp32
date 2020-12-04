@@ -35,7 +35,7 @@
 #include "Laser.h"
 #include "DacSpindle.h"
 #include "HuanyangSpindle.h"
-#include "H2ASpindle.h"
+// #include "H2ASpindle.h"
 #include "BESCSpindle.h"
 #include "10vSpindle.h"
 
@@ -48,7 +48,7 @@ namespace Spindles {
     Laser    laser;
     Dac      dac;
     Huanyang huanyang;
-    H2A      h2a;
+    // H2A      h2a;
     BESC     besc;
     _10v     _10v;
 
@@ -75,9 +75,9 @@ namespace Spindles {
             case SpindleType::_10V:
                 spindle = &_10v;
                 break;
-            case SpindleType::H2A:
-                spindle = &h2a;
-                break;
+            // case SpindleType::H2A:
+            //     spindle = &h2a;
+            //     break;
             case SpindleType::NONE:
             default:
                 spindle = &null;

@@ -25,12 +25,33 @@
 namespace Spindles {
 
     class VFD : public Spindle {
+
     private:
         static const int VFD_RS485_MAX_MSG_SIZE = 16;  // more than enough for a modbus message
+
+    protected:
+        struct ModbusCommand {
+            bool critical;  // TODO SdB: change into `uint8_t critical : 1;`: We want more flags...
+
+            uint8_t tx_length;
+            uint8_t rx_length;
+            uint8_t msg[VFD_RS485_MAX_MSG_SIZE];
+        };
+
+        struct Config {
+            SpindleState state;
+            uint32_t rpm;
+        };
+
+        // Commands that return the status. Returns nullptr if unavailable by this VFD (default):
+        using response_parser = bool (*)(const uint8_t* response, VFD* spindle);
+
+    private:
         static const int MAX_RETRIES            = 3;   // otherwise the spindle is marked 'unresponsive'
 
         bool set_mode(SpindleState mode, bool critical);
         bool get_pins_and_settings();
+
 
         uint8_t _txd_pin;
         uint8_t _rxd_pin;
@@ -47,13 +68,7 @@ namespace Spindles {
         static uint16_t ModRTU_CRC(uint8_t* buf, int msg_len);
 
     protected:
-        struct ModbusCommand {
-            bool critical;  // TODO SdB: change into `uint8_t critical : 1;`: We want more flags...
-
-            uint8_t tx_length;
-            uint8_t rx_length;
-            uint8_t msg[VFD_RS485_MAX_MSG_SIZE];
-        };
+        bool send_command(ModbusCommand& cmd, uint8_t* response_data);
 
         virtual void default_modbus_settings(uart_config_t& uart);
 
@@ -61,13 +76,11 @@ namespace Spindles {
         virtual void direction_command(SpindleState mode, ModbusCommand& data) = 0;
         virtual void set_speed_command(uint32_t rpm, ModbusCommand& data)      = 0;
 
-        // Commands that return the status. Returns nullptr if unavailable by this VFD (default):
-        using response_parser = bool (*)(const uint8_t* response, VFD* spindle);
-
-        virtual response_parser get_max_rpm(ModbusCommand& data) { return nullptr; }
-        virtual response_parser get_current_rpm(ModbusCommand& data) { return nullptr; }
-        virtual response_parser get_current_direction(ModbusCommand& data) { return nullptr; }
-        virtual response_parser get_status_ok(ModbusCommand& data) = 0;
+        // virtual response_parser get_max_rpm(ModbusCommand& data) { return nullptr; }
+        // virtual response_parser get_current_direction(ModbusCommand& data) { return nullptr; }
+        // virtual response_parser get_status_ok(ModbusCommand& data) = 0;
+        virtual bool get_current_rpm(uint32_t& rpm) { return false; }
+        virtual bool get_current_state(SpindleState& state) { return false; }
 
     public:
         VFD()           = default;
