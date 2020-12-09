@@ -409,6 +409,8 @@ namespace Spindles {
         _current_desired_config.rpm = rpm;
         xQueueOverwrite(vfd_config_queue, &_current_desired_config);
 
+        _current_state = state;  // store locally to track changes. Must be done before mc_dwell to avoid infinite recursion during suspend.
+
         if (state == SpindleState::Disable) {
             sys.spindle_speed = 0;
             if (_current_state != state) {
@@ -419,7 +421,6 @@ namespace Spindles {
                 mc_dwell(spindle_delay_spinup->get());
             }
         }
-        _current_state = state;  // store locally to track changes
 
         sys.report_ovr_counter = 0;  // Set to report change immediately
 
