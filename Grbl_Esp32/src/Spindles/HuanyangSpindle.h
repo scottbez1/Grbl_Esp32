@@ -28,14 +28,20 @@ namespace Spindles {
         int reg;
         uint16_t _actual_rpm   = 0;
 
+        // Low level command helpers
+        bool send_control_data(uint8_t control_data, uint8_t* out_control_status);
+        bool read_status_register(uint8_t index, uint16_t* out_value);
+        bool send_speed(uint32_t rpm);
+
+        // Intermediate command helpers
+        bool send_state_command(SpindleState state);
+
     protected:
         void default_modbus_settings(uart_config_t& uart) override;
-
-        void direction_command(SpindleState mode, ModbusCommand& data) override;
-        void set_speed_command(uint32_t rpm, ModbusCommand& data) override;
 
         // response_parser get_status_ok(ModbusCommand& data) override;
         // response_parser get_current_rpm(ModbusCommand& data) override;
         bool read_status(uint32_t& configured_rpm, uint32_t& actual_rpm, SpindleState& configured_state, SpindleState& actual_state) override;
+        bool request_configuration(const SpindleState* state, const uint32_t* rpm) override;
     };
 }

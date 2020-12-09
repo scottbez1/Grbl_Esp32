@@ -111,7 +111,53 @@
 
 #include <driver/uart.h>
 
+// Larger than any response (includes address, function code, length, data; excludes CRC)
+#define HUANYANG_MAX_RESPONSE_LENGTH 16
+
+// Huanyang top level function codes
+#define HUANYANG_FUNCTION_CODE_FUNC_READ            0x01
+#define HUANYANG_FUNCTION_CODE_FUNC_WRITE           0x02
+#define HUANYANG_FUNCTION_CODE_WRITE_CONTROL_DATA   0x03
+#define HUANYANG_FUNCTION_CODE_READ_STATUS_VALUE    0x04
+#define HUANYANG_FUNCTION_CODE_WRITE_FREQUENCY      0x05
+#define HUANYANG_FUNCTION_CODE_RESERVED_1           0x06
+#define HUANYANG_FUNCTION_CODE_RESERVED_2           0x07
+#define HUANYANG_FUNCTION_CODE_LOOP_TEST            0x08
+
+// Control data (command) bits - sent in function 0x03 Write Control Data
+#define HUANYANG_CNTR_BIT_RUN   (1 << 0)
+#define HUANYANG_CNTR_BIT_FOR   (1 << 1)
+#define HUANYANG_CNTR_BIT_REV   (1 << 2)
+#define HUANYANG_CNTR_BIT_STOP  (1 << 3)
+#define HUANYANG_CNTR_BIT_RF    (1 << 4)
+#define HUANYANG_CNTR_BIT_JOG   (1 << 5)
+#define HUANYANG_CNTR_BIT_JOGF  (1 << 6)
+#define HUANYANG_CNTR_BIT_JOGR  (1 << 7)
+
+
+// Control status (response) bits - in response to function 0x03 Write Control Data
+#define HUANYANG_CNST_BIT_RUN           (1 << 0)
+#define HUANYANG_CNST_BIT_JOG           (1 << 1)
+#define HUANYANG_CNST_BIT_REVERSE       (1 << 2)
+#define HUANYANG_CNST_BIT_RUNNING       (1 << 3)
+#define HUANYANG_CNST_BIT_JOGGING       (1 << 4)
+#define HUANYANG_CNST_BIT_RF2           (1 << 5)
+#define HUANYANG_CNST_BIT_BRAKING       (1 << 6)
+#define HUANYANG_CNST_BIT_TRACK_START   (1 << 7)
+
+
+// Status value indexes - requested via 0x04 Read Status Value
+#define HUANYANG_STATUS_IDX_SET_F   0
+#define HUANYANG_STATUS_IDX_OUT_F   1
+#define HUANYANG_STATUS_IDX_OUT_A   2
+#define HUANYANG_STATUS_IDX_ROTT    3
+#define HUANYANG_STATUS_IDX_DCV     4
+#define HUANYANG_STATUS_IDX_ACV     5
+#define HUANYANG_STATUS_IDX_CONT    6
+#define HUANYANG_STATUS_IDX_TMP     7
+
 namespace Spindles {
+
     void Huanyang::default_modbus_settings(uart_config_t& uart) {
         // sets the uart to 9600 8N1
         VFD::default_modbus_settings(uart);
@@ -120,201 +166,203 @@ namespace Spindles {
         // Baud rate is set in the PD164 setting.
     }
 
-    void Huanyang::direction_command(SpindleState mode, ModbusCommand& data) {
+    bool Huanyang::send_control_data(uint8_t control_data, uint8_t* out_control_status) {
+        ModbusCommand data;
+        uint8_t response[4];
+
         // NOTE: data length is excluding the CRC16 checksum.
         data.tx_length = 4;
         data.rx_length = 4;
 
         // data.msg[0] is omitted (modbus address is filled in later)
-        data.msg[1] = 0x03;
+        data.msg[1] = HUANYANG_FUNCTION_CODE_WRITE_CONTROL_DATA;
         data.msg[2] = 0x01;
+        data.msg[3] = control_data;
 
-        switch (mode) {
-            case SpindleState::Cw:
-                data.msg[3] = 0x01;
-                break;
-            case SpindleState::Ccw:
-                data.msg[3] = 0x11;
-                break;
-            default:  // SpindleState::Disable
-                data.msg[3] = 0x08;
-                break;
+        if (!send_command(data, response)) {
+            return false;
+        } else {
+            if (response[1] != HUANYANG_FUNCTION_CODE_WRITE_CONTROL_DATA) {
+#ifdef VFD_DEBUG_MODE
+                grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Incorrect function in Write Control Data response %d", response[1]);
+#endif
+                return false;
+            } else if (response[2] != 0x01) {
+#ifdef VFD_DEBUG_MODE
+                grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Incorrect length in Write Control Data response %d", response[2]);
+#endif
+                return false;
+            }
+
+            *out_control_status = response[3];
+            return true;
         }
     }
 
-    void Huanyang::set_speed_command(uint32_t rpm, ModbusCommand& data) {
+    bool Huanyang::read_status_register(uint8_t index, uint16_t* out_value) {
+        ModbusCommand data;
+        uint8_t response[6];
+
+        // NOTE: data length is excluding the CRC16 checksum.
+        data.tx_length = 4;
+        data.rx_length = 6;
+
+        // data.msg[0] is omitted (modbus address is filled in later)
+        data.msg[1] = HUANYANG_FUNCTION_CODE_READ_STATUS_VALUE;
+        data.msg[2] = 0x01;
+        data.msg[3] = index;
+
+        if (!send_command(data, response)) {
+            return false;
+        }
+
+        if (response[1] != HUANYANG_FUNCTION_CODE_READ_STATUS_VALUE) {
+#ifdef VFD_DEBUG_MODE
+            grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Incorrect function in Read Status response %d", response[1]);
+#endif
+            return false;
+        } else if (response[2] != 0x03) {
+#ifdef VFD_DEBUG_MODE
+            grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Incorrect length in Read Status response %d", response[2]);
+#endif
+            return false;
+        } else if (response[3] != index) {
+#ifdef VFD_DEBUG_MODE
+            grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Incorrect index in Read Status response (expected %d, got %d)", index, response[3]);
+#endif
+            return false;
+        }
+
+        *out_value = (response[4] << 8) | response[5];
+        return true;
+    }
+
+    bool Huanyang::send_speed(uint32_t rpm) {
+        ModbusCommand data;
+        uint8_t response[5];
+
         // NOTE: data length is excluding the CRC16 checksum.
         data.tx_length = 5;
         data.rx_length = 5;
 
         // data.msg[0] is omitted (modbus address is filled in later)
-        data.msg[1] = 0x05;
-        data.msg[2] = 0x02;
+        data.msg[1] = HUANYANG_FUNCTION_CODE_WRITE_FREQUENCY;
+        data.msg[2] = 2;
 
-        uint16_t value = (uint16_t)(rpm * 100 / 60);  // send Hz * 10  (Ex:1500 RPM = 25Hz .... Send 2500)
+        // TODO: read RPM conversion factor from VFD and use that
+        uint16_t frequency = (uint16_t)(rpm * 100 / 60);  // send Hz * 10  (Ex:1500 RPM = 25Hz .... Send 2500)
 
-        data.msg[3] = (value >> 8) & 0xFF;
-        data.msg[4] = (value & 0xFF);
+        data.msg[3] = (frequency >> 8) & 0xFF;
+        data.msg[4] = (frequency & 0xFF);
+
+        if (!send_command(data, response)) {
+            return false;
+        }
+
+        if (response[1] != HUANYANG_FUNCTION_CODE_WRITE_FREQUENCY) {
+#ifdef VFD_DEBUG_MODE
+            grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Incorrect function in Write Frequency response %d", response[1]);
+#endif
+            return false;
+        } else if (response[2] != 2) {
+#ifdef VFD_DEBUG_MODE
+            grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Incorrect length in Write Frequency response %d", response[2]);
+#endif
+            return false;
+        }
+
+        // Frequency should be echo'ed back to us
+        bool correct = response[3] == ((frequency >> 8) & 0xFF)
+            && response[4] == (frequency & 0xFF);
+
+        if (!correct) {
+#ifdef VFD_DEBUG_MODE
+            grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Incorrect frequency in Write Frequency response %d %d", response[3], response[4]);
+#endif
+        }
+        return correct;
     }
 
-//     Huanyang::response_parser Huanyang::get_status_ok(ModbusCommand& data) {
-//         // NOTE: data length is excluding the CRC16 checksum.
-//         data.tx_length = 6;
-//         data.rx_length = 6;
+    bool Huanyang::send_state_command(SpindleState mode) {
+        uint8_t control_data;
+        switch (mode) {
+            case SpindleState::Cw:
+                control_data = HUANYANG_CNTR_BIT_RUN;
+                break;
+            case SpindleState::Ccw:
+                control_data = HUANYANG_CNTR_BIT_RUN | HUANYANG_CNTR_BIT_RF;
+                break;
+            default:  // SpindleState::Disable
+                control_data = HUANYANG_CNTR_BIT_STOP;
+                break;
+        }
 
-//         // data.msg[0] is omitted (modbus address is filled in later)
-//         data.msg[1] = 0x04;
-//         data.msg[2] = 0x03;
-//         data.msg[3] = reg;
-//         data.msg[4] = 0x00;
-//         data.msg[5] = 0x00;
+        uint8_t control_status;
+        bool sent = send_control_data(control_data, &control_status);
+        if (!sent) {
+            return false;
+        }
 
-//         if (reg < 0x03) {
-//             reg++;
-//         } else {
-//             reg = 0x00;
-//         }
-//         return [](const uint8_t* response, Spindles::VFD* vfd) -> bool { return true; };
-//     }
+        // The control status in this response doesn't appear to reflect the change we just made, so we don't
+        // validate any status in the response here (they will be checked as part of the regular health checks)
+        return true;
+    }
 
-//     Huanyang::response_parser Huanyang::get_current_rpm(ModbusCommand& data) {
-//         // NOTE: data length is excluding the CRC16 checksum.
-//         data.tx_length = 6;
-//         data.rx_length = 6;
+    bool Huanyang::read_status(uint32_t& configured_rpm, uint32_t& actual_rpm, SpindleState& configured_state, SpindleState& actual_state) {
+        // Step 1) Read status register for RPM
+        uint16_t actual_rpm_raw;
+        if (!read_status_register(HUANYANG_STATUS_IDX_ROTT, &actual_rpm_raw)) {
+            return false;
+        }
+        actual_rpm = actual_rpm_raw;
 
-//         // data.msg[0] is omitted (modbus address is filled in later)
-//         data.msg[1] = 0x04;
-//         data.msg[2] = 0x03;
-//         data.msg[3] = 0x03; // RPM
-//         data.msg[4] = 0x00;
-//         data.msg[5] = 0x00;
-
-//         return [](const uint8_t* response, Spindles::VFD* vfd) -> bool {
-//             uint16_t rpm = (response[4] << 8) | response[5];
-//             if (rpm != ((Huanyang*)vfd)->_actual_rpm) {
-//                 ((Huanyang*)vfd)->_actual_rpm = rpm;
-// // #ifdef VFD_DEBUG_MODE
-//                 grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Spindle speed changed to %d", rpm);
-// // #endif
-//             }
-//             return true;
-//         };
-//     }
-
-        bool Huanyang::read_status(uint32_t& configured_rpm, uint32_t& actual_rpm, SpindleState& configured_state, SpindleState& actual_state) {
-            ModbusCommand data;
-            uint8_t response[16]; // Larger than any expected response
+        // Step 2) Read status register for set frequency (can be converted to RPM)
+        uint16_t configured_frequency_x100;
+        if (!read_status_register(HUANYANG_STATUS_IDX_SET_F, &configured_frequency_x100)) {
+            return false;
+        }
+        // TODO: read RPM conversion factor from VFD
+        configured_rpm = configured_frequency_x100 * 60 / 100;
 
 
-            // Read status register for RPM
+        // Step 3) Read control status (write empty control data)
+        // TODO: check that sending without reverse bit doesn't cause issues!
+        uint8_t control_status;
+        if (!send_control_data(0, &control_status)) {
+            return false;
+        }
 
-            // NOTE: data length is excluding the CRC16 checksum.
-            data.tx_length = 6;
-            data.rx_length = 6;
+        // Configured state is based off the "run" bit and "r/f" bit
+        if (control_status & HUANYANG_CNST_BIT_RUN) {
+            configured_state = (control_status & HUANYANG_CNST_BIT_REVERSE) ? SpindleState::Ccw : SpindleState::Cw;
+        } else {
+            configured_state = SpindleState::Disable;
+        }
 
-            // data.msg[0] is omitted (modbus address is filled in later)
-            data.msg[1] = 0x04;
-            data.msg[2] = 0x03;
-            data.msg[3] = 0x03; // RPM
-            data.msg[4] = 0x00;
-            data.msg[5] = 0x00;
+        // Actual state is based off the "running" bit and "r/f" bit
+        if (control_status & HUANYANG_CNST_BIT_RUNNING) {
+            actual_state = (control_status & HUANYANG_CNST_BIT_REVERSE) ? SpindleState::Ccw : SpindleState::Cw;
+        } else {
+            actual_state = SpindleState::Disable;
+        }
+        return true;
+    }
 
-            if (!send_command(data, response)) {
-                return false;
-            } else {
-                if (response[1] != 0x04) {
-    #ifdef VFD_DEBUG_MODE
-                    grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Incorrect function in response %d", response[1]);
-    #endif
-                    return false;
-                } else if (response[2] != 0x03) {
-    #ifdef VFD_DEBUG_MODE
-                    grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Incorrect length in response %d", response[2]);
-    #endif
-                    return false;
-                }
-                actual_rpm = (response[4] << 8) | response[5];
+    bool Huanyang::request_configuration(const SpindleState* state, const uint32_t* rpm) {
+        bool success = true;
+        if (state != nullptr) {
+            if (!send_state_command(*state)) {
+                success = false;
             }
+        }
 
-
-            // Read status register for set frequency (can be converted to RPM)
-
-            // NOTE: data length is excluding the CRC16 checksum.
-            data.tx_length = 6;
-            data.rx_length = 6;
-
-            // data.msg[0] is omitted (modbus address is filled in later)
-            data.msg[1] = 0x04;
-            data.msg[2] = 0x03;
-            data.msg[3] = 0x00; // Set Frequency
-            data.msg[4] = 0x00;
-            data.msg[5] = 0x00;
-
-            if (!send_command(data, response)) {
-                return false;
-            } else {
-                if (response[1] != 0x04) {
-    #ifdef VFD_DEBUG_MODE
-                    grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Incorrect function in response %d", response[1]);
-    #endif
-                    return false;
-                } else if (response[2] != 0x03) {
-    #ifdef VFD_DEBUG_MODE
-                    grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Incorrect length in response %d", response[2]);
-    #endif
-                    return false;
-                }
-                uint32_t configured_frequency_x100 = (response[4] << 8) | response[5];
-                configured_rpm = configured_frequency_x100 * 60 / 100;
+        if (rpm != nullptr) {
+            if (!send_speed(*rpm)) {
+                success = false;
             }
+        }
 
-
-            // Read control register
-
-            // NOTE: data length is excluding the CRC16 checksum.
-            data.tx_length = 4;
-            data.rx_length = 4;
-
-            // data.msg[0] is omitted (modbus address is filled in later)
-            data.msg[1] = 0x03;
-            data.msg[2] = 0x01;
-            data.msg[3] = 0x00; // Empty control register
-
-            if (!send_command(data, response)) {
-                return false;
-            } else {
-                if (response[1] != 0x03) {
-    #ifdef VFD_DEBUG_MODE
-                    grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Incorrect function in response %d", response[1]);
-    #endif
-                    return false;
-                } else if (response[2] != 0x01) {
-    #ifdef VFD_DEBUG_MODE
-                    grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Incorrect length in response %d", response[2]);
-    #endif
-                    return false;
-                }
-
-                uint8_t cnst = response[3];
-
-                // Configured state is based off the "run" bit and "r/f" bit
-                if (cnst & (1 << 0)) {
-                    configured_state = (cnst & (1 << 2)) ? SpindleState::Ccw : SpindleState::Cw;
-                } else {
-                    configured_state = SpindleState::Disable;
-                }
-
-                // Actual state is based off the "running" bit and "r/f" bit
-                if (cnst & (1 << 3)) {
-                    actual_state = (cnst & (1 << 2)) ? SpindleState::Ccw : SpindleState::Cw;
-                } else {
-                    actual_state = SpindleState::Disable;
-                }
-
-            }
-
-
-            return true;
-        };
+        return success;
+    }
 
 }

@@ -49,37 +49,43 @@ namespace Spindles {
     private:
         static const int MAX_RETRIES            = 3;   // otherwise the spindle is marked 'unresponsive'
 
-        bool set_mode(SpindleState mode, bool critical);
         bool get_pins_and_settings();
 
+        uint32_t bound_rpm(uint32_t rpm);
 
         uint8_t _txd_pin;
         uint8_t _rxd_pin;
         uint8_t _rts_pin;
 
-        uint32_t _current_rpm  = 0;
+        Config _current_desired_config = {
+            .state = SpindleState::Disable,
+            .rpm = 0
+        };
         bool     _task_running = false;
-        bool     vfd_ok        = true;
+        bool     vfd_ok        = false;
 
-        static QueueHandle_t vfd_cmd_queue;
+        static QueueHandle_t vfd_config_queue;
         static TaskHandle_t  vfd_cmdTaskHandle;
         static void          vfd_cmd_task(void* pvParameters);
 
         static uint16_t ModRTU_CRC(uint8_t* buf, int msg_len);
 
     protected:
+        /**
+         * Send a command. Returns whether the command was sent successfully.
+         * 
+         * If successful, the response data (of length cmd.rx_length, i.e. not including CRC which has already been validated)
+         * will be placed at response_data.
+         */
         bool send_command(ModbusCommand& cmd, uint8_t* response_data);
 
         virtual void default_modbus_settings(uart_config_t& uart);
-
-        // Commands:
-        virtual void direction_command(SpindleState mode, ModbusCommand& data) = 0;
-        virtual void set_speed_command(uint32_t rpm, ModbusCommand& data)      = 0;
 
         // virtual response_parser get_max_rpm(ModbusCommand& data) { return nullptr; }
         // virtual response_parser get_current_direction(ModbusCommand& data) { return nullptr; }
         // virtual response_parser get_status_ok(ModbusCommand& data) = 0;
         virtual bool read_status(uint32_t& configured_rpm, uint32_t& actual_rpm, SpindleState& configured_state, SpindleState& actual_state) { return false; };
+        virtual bool request_configuration(const SpindleState* state, const uint32_t* rpm) { return false; };
 
 
     public:
