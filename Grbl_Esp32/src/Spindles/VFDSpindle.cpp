@@ -151,6 +151,7 @@ namespace Spindles {
                             "RS485 spindle reported incorrect state configuration (expected %d but got %d)",
                             desired_config.state,
                             configured_state);
+                        mc_reset();
                         sys_rt_exec_alarm = ExecAlarm::SpindleControl;
                     } else if (desired_config.state != SpindleState::Disable && abs(desired_config.rpm - configured_rpm) > VFD_RS485_CONFIGURED_RPM_TOLERANCE) {
                         grbl_msg_sendf(
@@ -159,11 +160,13 @@ namespace Spindles {
                             "RS485 spindle reported incorrect rpm configuration (expected %d but got %d)",
                             desired_config.rpm,
                             configured_rpm);
+                        mc_reset();
                         sys_rt_exec_alarm = ExecAlarm::SpindleControl;
                     }
                 } else {
                     if (desired_config.rpm > 0 || desired_config.state != SpindleState::Disable) {
                         grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "RS485 unhealthy but action requested!");
+                        mc_reset();
                         sys_rt_exec_alarm = ExecAlarm::SpindleControl;
                     }
                 }
@@ -219,11 +222,13 @@ namespace Spindles {
         auto crc16response = ModRTU_CRC(rx_message, cmd.rx_length - 2);
 
         if (read_length != cmd.rx_length) {
-            grbl_msg_sendf(CLIENT_SERIAL,
-                            MsgLevel::Info,
-                            "RS485 received message of unexpected length; expected %d, got %d",
-                            int(cmd.rx_length),
-                            int(read_length));
+            if (read_length > 0) {
+                grbl_msg_sendf(CLIENT_SERIAL,
+                                MsgLevel::Info,
+                                "RS485 received message of unexpected length; expected %d, got %d",
+                                int(cmd.rx_length),
+                                int(read_length));
+            }
             return false;
         } else if (rx_message[read_length - 1] != (crc16response & 0xFF00) >> 8 ||  // check CRC byte 1
                 rx_message[read_length - 2] != (crc16response & 0xFF)) {            // check CRC byte 0

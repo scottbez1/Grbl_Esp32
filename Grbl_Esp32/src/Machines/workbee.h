@@ -55,7 +55,7 @@
 #define VFD_RS485_ADDR          1
 
 // To debug RS485 spindle comms:
-#define VFD_DEBUG_MODE
+// #define VFD_DEBUG_MODE
 
 
 #define X_LIMIT_PIN             GPIO_NUM_34
@@ -72,7 +72,7 @@
 
 #define INVERT_CONTROL_PIN_MASK B1110
 
-// #define CONTROL_SAFETY_DOOR_PIN GPIO_NUM_39
+#define CONTROL_SAFETY_DOOR_PIN GPIO_NUM_39
 // #define CONTROL_RESET_PIN       GPIO_NUM_5
 // #define CONTROL_FEED_HOLD_PIN   GPIO_NUM_2
 // #define CONTROL_CYCLE_START_PIN GPIO_NUM_0
