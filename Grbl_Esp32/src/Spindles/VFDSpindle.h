@@ -31,8 +31,6 @@ namespace Spindles {
 
     protected:
         struct ModbusCommand {
-            bool critical;  // TODO SdB: change into `uint8_t critical : 1;`: We want more flags...
-
             uint8_t tx_length;
             uint8_t rx_length;
             uint8_t msg[VFD_RS485_MAX_MSG_SIZE];
@@ -72,21 +70,53 @@ namespace Spindles {
 
     protected:
         /**
-         * Send a command. Returns whether the command was sent successfully.
-         * 
-         * If successful, the response data (of length cmd.rx_length, i.e. not including CRC which has already been validated)
-         * will be placed at response_data.
+         * Send a command. Returns whether the command was sent successfully and response received.
+         *
+         * If successful, the response data (of length cmd.rx_length, i.e. not including CRC, which is already
+         * checked as part of this method) will be placed into response_data.
+         *
+         * Must be called from the VFD task.
          */
         bool send_command(ModbusCommand& cmd, uint8_t* response_data);
 
         virtual void default_modbus_settings(uart_config_t& uart);
 
-        // virtual response_parser get_max_rpm(ModbusCommand& data) { return nullptr; }
-        // virtual response_parser get_current_direction(ModbusCommand& data) { return nullptr; }
-        // virtual response_parser get_status_ok(ModbusCommand& data) = 0;
+        /**
+         * Invoked by the VFD task for a concrete implementation to check the current state of the VFD.
+         *
+         * Should return true if the current status was read successfully; this means that ALL out params MUST
+         * be set before returning true.
+         *
+         * Out params MAY be set when returning false, but their values are unused in that case.
+         * 
+         * Implementations will likely use send_command to send one or more messages to the VFD and parse the
+         * responses. If the VFD does not support reading a particular value (say, actual_rpm), it still must be
+         * set to a reasonable value before returning!
+         * 
+         * For example, if the actual_rpm cannot actually be read from the VFD, an implementation may choose to
+         * return the most recent rpm value requested by request_configuration.
+         */
         virtual bool read_status(uint32_t& configured_rpm, uint32_t& actual_rpm, SpindleState& configured_state, SpindleState& actual_state) { return false; };
-        virtual bool request_configuration(const SpindleState* state, const uint32_t* rpm) { return false; };
 
+
+        /**
+         * Invoked by the VFD task to request a configuration from the VFD.
+         *
+         * Parameters will be NULL if the requested value is unchanged; this allows implementations flexibility
+         * to skip some commands if not needed, which will improve the read_status polling rate.
+         *
+         * Should return true if all non-null configuration parameters were sent and acknowledged successfully.
+         * If the implementation requires sending multiple commands to the VFD, any of those commands failed,
+         * it should return false.
+         *
+         * Optionally, if the VFD protocol supports negative acknowledgements (e.g. the command was received but
+         * a value was out of range), the implementation should return false upon such negative acknowledgement.
+         * If the VFD protocol doesn't support negative acknowledgements, it is OK to return true when the command
+         * is acknowledged, even if it is still unknown whether it was *accepted*. The VFD task checks whether the
+         * configuration was accepted or not as part of regular read_status polling, so there is no need to
+         * duplicate that functionality here if the protocol does not readily provide it.
+         */
+        virtual bool request_configuration(const SpindleState* state, const uint32_t* rpm) { return false; };
 
     public:
         VFD()           = default;

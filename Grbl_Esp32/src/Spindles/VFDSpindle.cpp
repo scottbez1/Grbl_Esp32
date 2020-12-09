@@ -40,7 +40,7 @@ const int         VFD_RS485_MODBUS_QUIET_TICKS = pdMS_TO_TICKS(50);  // minimum 
 const int         RESPONSE_WAIT_TICKS  = 50;   // how long to wait for a response
 const int         VFD_RS485_POLL_RATE  = pdMS_TO_TICKS(100); //200;  // in milliseconds between commands
 
-const int         VFD_RS485_CONFIGURED_RPM_TOLERANCE = 10; // Acceptable error due to potential rounding - TODO: figure out right value
+const int         VFD_RS485_CONFIGURED_RPM_TOLERANCE = 1; // Acceptable error due to potential rounding - TODO: figure out right value
 
 const SpindleState VFD_RS485_DISABLED_STATE = SpindleState::Disable;
 const uint32_t     VFD_RS485_DISABLED_RPM = 0;
@@ -63,7 +63,7 @@ namespace Spindles {
         VFD*          instance = static_cast<VFD*>(pvParameters);
         uint8_t       rx_message[VFD_RS485_MAX_MSG_SIZE];
 
-        bool healthy = false;
+        bool healthy = true;
 
         // The desired configuration, as requested via the VFDSpindle public API. This may NOT be what
         // we send to the VFD, because internal logic may take precedence (e.g. unhealthy
@@ -82,13 +82,12 @@ namespace Spindles {
         SpindleState actual_state;
 
         while (true) {
-
-            // Check queue for changed config. We only care about the most recently requested configuration
-            // TODO: use Overwrite for writes
-            while (xQueueReceive(vfd_config_queue, &desired_config, 0) == pdTRUE) {}
+            // Check queue for changed config. There is at max 1 item in the queue, as all producers use xQueueOverwrite
+            xQueueReceive(vfd_config_queue, &desired_config, 0);
 
             if (!healthy || sys.state == State::Alarm) {
-                // Disable the spindle if comms are unhealthy or system is in alarm
+                // Disable the spindle if comms are unhealthy or system is in alarm. Note that even if the system is in
+                // alarm, we will continue to attempt communicating with the spindle to turn it off, for safety.
                 state_request = &VFD_RS485_DISABLED_STATE;
                 rpm_request = &VFD_RS485_DISABLED_RPM;
             } else {
@@ -104,67 +103,82 @@ namespace Spindles {
                 }
             }
 
-            bool config_sent = instance->request_configuration(state_request, rpm_request);
+            if (state_request != nullptr || rpm_request != nullptr) {
+                bool config_sent = instance->request_configuration(state_request, rpm_request);
 #ifdef VFD_DEBUG_MODE
-            if (!config_sent) {
-                char state_buffer[10] = "unchanged";
-                char rpm_buffer[11] = "unchanged";
-                if (state_request != nullptr) {
-                    snprintf(state_buffer, sizeof(state_buffer), "%d", (int) *state_request);
+                if (!config_sent) {
+                    char state_buffer[10] = "unchanged";
+                    char rpm_buffer[11] = "unchanged";
+                    if (state_request != nullptr) {
+                        snprintf(state_buffer, sizeof(state_buffer), "%d", (int) *state_request);
+                    }
+                    if (rpm_request != nullptr) {
+                        snprintf(rpm_buffer, sizeof(rpm_buffer), "%d", *rpm_buffer);
+                    }
+                    grbl_msg_sendf(
+                        CLIENT_SERIAL,
+                        MsgLevel::Info,
+                        "RS485 failed to send config (state=%s, rpm=%s)",
+                        state_buffer,
+                        rpm_buffer
+                        );
                 }
-                if (rpm_request != nullptr) {
-                    snprintf(rpm_buffer, sizeof(rpm_buffer), "%d", *rpm_buffer);
-                }
-                grbl_msg_sendf(
-                    CLIENT_SERIAL,
-                    MsgLevel::Info,
-                    "RS485 failed to send config (state=%s, rpm=%s)",
-                    state_buffer,
-                    rpm_buffer
-                    );
-            }
 #endif
+            }
 
             // Read status - determines healthy or not
-            healthy = instance->read_status(configured_rpm, actual_rpm, configured_state, actual_state);
-#ifdef VFD_DEBUG_MODE
-            if (healthy) {
-                grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "RS485 status: rpm=%d, arpm=%d, st=%d, ast=%d", configured_rpm, actual_rpm, configured_state, actual_state);
+            bool new_healthy = instance->read_status(configured_rpm, actual_rpm, configured_state, actual_state);
+            if (new_healthy && !healthy) {
+                grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "RS485 became healthy");
+            } else if (!new_healthy && healthy) {
+                grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "RS485 is NOT healthy");
             }
-#endif
+            healthy = new_healthy;
 
-            // Raise an alarm if current state is not as intended
-            if (healthy) {
-                if (desired_config.state != configured_state) {
-                    grbl_msg_sendf(
-                        CLIENT_SERIAL, 
-                        MsgLevel::Info, 
-                        "RS485 spindle reported incorrect state configuration (expected %d but got %d)",
-                        desired_config.state,
-                        configured_state);
-                    sys_rt_exec_alarm = ExecAlarm::SpindleControl;
-                } else if (desired_config.state != SpindleState::Disable && abs(desired_config.rpm - configured_rpm) > VFD_RS485_CONFIGURED_RPM_TOLERANCE) {
-                    grbl_msg_sendf(
-                        CLIENT_SERIAL, 
-                        MsgLevel::Info, 
-                        "RS485 spindle reported incorrect rpm configuration (expected %d but got %d)",
-                        desired_config.rpm,
-                        configured_rpm);
-                    sys_rt_exec_alarm = ExecAlarm::SpindleControl;
-                }
-            } else {
-                if (desired_config.rpm > 0 || desired_config.state != SpindleState::Disable) {
-                    grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "RS485 unhealthy but action requested!");
-                    sys_rt_exec_alarm = ExecAlarm::SpindleControl;
+// #ifdef VFD_DEBUG_MODE
+//             if (healthy) {
+//                 grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "RS485 status: rpm=%d, arpm=%d, st=%d, ast=%d", configured_rpm, actual_rpm, configured_state, actual_state);
+//             }
+// #endif
+
+            // Raise an alarm if current state is not as we requested
+            if (sys.state != State::Alarm) {
+                if (healthy) {
+                    if (desired_config.state != configured_state) {
+                        grbl_msg_sendf(
+                            CLIENT_SERIAL, 
+                            MsgLevel::Info, 
+                            "RS485 spindle reported incorrect state configuration (expected %d but got %d)",
+                            desired_config.state,
+                            configured_state);
+                        sys_rt_exec_alarm = ExecAlarm::SpindleControl;
+                    } else if (desired_config.state != SpindleState::Disable && abs(desired_config.rpm - configured_rpm) > VFD_RS485_CONFIGURED_RPM_TOLERANCE) {
+                        grbl_msg_sendf(
+                            CLIENT_SERIAL, 
+                            MsgLevel::Info, 
+                            "RS485 spindle reported incorrect rpm configuration (expected %d but got %d)",
+                            desired_config.rpm,
+                            configured_rpm);
+                        sys_rt_exec_alarm = ExecAlarm::SpindleControl;
+                    }
+                } else {
+                    if (desired_config.rpm > 0 || desired_config.state != SpindleState::Disable) {
+                        grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "RS485 unhealthy but action requested!");
+                        sys_rt_exec_alarm = ExecAlarm::SpindleControl;
+                    }
                 }
             }
 
-
-            vTaskDelay(VFD_RS485_POLL_RATE);  // TODO: What is the best value here?
+            vTaskDelay(VFD_RS485_POLL_RATE);
         }
     }
 
     bool VFD::send_command(ModbusCommand& cmd, uint8_t* response_data) {
+        // Hard assertion that this is only called from the VFD task (anything else indicates *programmer*
+        // error in a VFDSpindle implementation, so should fail fast)
+        TaskHandle_t current_task = xTaskGetCurrentTaskHandle();
+        assert(current_task == vfd_cmdTaskHandle);
+
         // Set the address
         cmd.msg[0] = VFD_RS485_ADDR;
 
@@ -223,6 +237,7 @@ namespace Spindles {
         // Valid response - copy to the output param, without the CRC (not relevant beyond this layer since we already validated it)
         memcpy(response_data, rx_message, read_length - 2);
 
+        // TODO figure out where to put this
         // static UBaseType_t uxHighWaterMark = 0;
         // reportTaskStackSize(uxHighWaterMark);
 
@@ -382,30 +397,6 @@ namespace Spindles {
             return;
         }
 
-        // TODO
-        // bool critical = (sys.state == State::Cycle || state != SpindleState::Disable);
-
-        // if (_current_state != state) {  // already at the desired state. This function gets called a lot.
-        //     set_mode(state, critical);  // critical if we are in a job
-        //     set_rpm(rpm);
-        //     if (state == SpindleState::Disable) {
-        //         sys.spindle_speed = 0;
-        //         if (_current_state != state) {
-        //             mc_dwell(spindle_delay_spindown->get());
-        //         }
-        //     } else {
-        //         if (_current_state != state) {
-        //             mc_dwell(spindle_delay_spinup->get());
-        //         }
-        //     }
-        // } else {
-        //     if (_current_rpm != rpm) {
-        //         set_rpm(rpm);
-        //     }
-        // }
-
-        // _current_state = state;  // store locally for faster get_state()
-
         rpm = bound_rpm(rpm);
         sys.spindle_speed = rpm;
         
@@ -423,6 +414,7 @@ namespace Spindles {
                 mc_dwell(spindle_delay_spinup->get());
             }
         }
+        _current_state = state;  // store locally to track changes
 
         sys.report_ovr_counter = 0;  // Set to report change immediately
 
@@ -442,14 +434,6 @@ namespace Spindles {
         sys.spindle_speed = rpm;
 
         // TODO add the speed modifiers override, linearization, etc.
-
-        // TODO
-        // ModbusCommand rpm_cmd;
-        // rpm_cmd.msg[0] = VFD_RS485_ADDR;
-
-        // set_speed_command(rpm, rpm_cmd);
-
-        // rpm_cmd.critical = false;
 
         _current_desired_config.rpm = rpm;
         xQueueOverwrite(vfd_config_queue, &_current_desired_config);

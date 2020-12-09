@@ -28,6 +28,8 @@
 
     ==============================================================================
 
+    TODO: update docs
+
     If a user changes state or RPM level, the command to do that is sent. If
     the command is not responded to a message is sent to serial that there was
     a timeout. If the Grbl is in a critical state, an alarm will be generated and
@@ -111,9 +113,6 @@
 
 #include <driver/uart.h>
 
-// Larger than any response (includes address, function code, length, data; excludes CRC)
-#define HUANYANG_MAX_RESPONSE_LENGTH 16
-
 // Huanyang top level function codes
 #define HUANYANG_FUNCTION_CODE_FUNC_READ            0x01
 #define HUANYANG_FUNCTION_CODE_FUNC_WRITE           0x02
@@ -124,7 +123,7 @@
 #define HUANYANG_FUNCTION_CODE_RESERVED_2           0x07
 #define HUANYANG_FUNCTION_CODE_LOOP_TEST            0x08
 
-// Control data (command) bits - sent in function 0x03 Write Control Data
+// Function 0x03 - Write Control Data - Control data (command to VFD) bits
 #define HUANYANG_CNTR_BIT_RUN   (1 << 0)
 #define HUANYANG_CNTR_BIT_FOR   (1 << 1)
 #define HUANYANG_CNTR_BIT_REV   (1 << 2)
@@ -134,8 +133,7 @@
 #define HUANYANG_CNTR_BIT_JOGF  (1 << 6)
 #define HUANYANG_CNTR_BIT_JOGR  (1 << 7)
 
-
-// Control status (response) bits - in response to function 0x03 Write Control Data
+// Function 0x03 - Write Control Data - Control status (response from VFD) bits
 #define HUANYANG_CNST_BIT_RUN           (1 << 0)
 #define HUANYANG_CNST_BIT_JOG           (1 << 1)
 #define HUANYANG_CNST_BIT_REVERSE       (1 << 2)
@@ -145,8 +143,7 @@
 #define HUANYANG_CNST_BIT_BRAKING       (1 << 6)
 #define HUANYANG_CNST_BIT_TRACK_START   (1 << 7)
 
-
-// Status value indexes - requested via 0x04 Read Status Value
+// Function 0x04 Read Status Value - status value indexes (referred to as "CFG" in the manual)
 #define HUANYANG_STATUS_IDX_SET_F   0
 #define HUANYANG_STATUS_IDX_OUT_F   1
 #define HUANYANG_STATUS_IDX_OUT_A   2
