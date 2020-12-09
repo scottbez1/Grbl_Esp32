@@ -28,6 +28,8 @@ namespace Spindles {
         int reg;
         uint16_t _actual_rpm   = 0;
 
+        SpindleState last_state = SpindleState::Disable;
+
         // Low level command helpers
         bool send_control_data(uint8_t control_data, uint8_t* out_control_status);
         bool read_status_register(uint8_t index, uint16_t* out_value);

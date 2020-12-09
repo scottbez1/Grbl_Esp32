@@ -322,10 +322,11 @@ namespace Spindles {
         configured_rpm = configured_frequency_x100 * 60 / 100;
 
 
-        // Step 3) Read control status (write empty control data)
+        // Step 3) Read control status (write control data without run or stop set)
         // TODO: check that sending without reverse bit doesn't cause issues!
+        uint8_t control_data = last_state == SpindleState::Cw ? 0 : HUANYANG_CNTR_BIT_RF;
         uint8_t control_status;
-        if (!send_control_data(0, &control_status)) {
+        if (!send_control_data(control_data, &control_status)) {
             return false;
         }
 
@@ -348,6 +349,7 @@ namespace Spindles {
     bool Huanyang::request_configuration(const SpindleState* state, const uint32_t* rpm) {
         bool success = true;
         if (state != nullptr) {
+            last_state = *state;
             if (!send_state_command(*state)) {
                 success = false;
             }
