@@ -41,8 +41,6 @@ namespace Spindles {
     protected:
         void default_modbus_settings(uart_config_t& uart) override;
 
-        // response_parser get_status_ok(ModbusCommand& data) override;
-        // response_parser get_current_rpm(ModbusCommand& data) override;
         bool read_status(uint32_t& configured_rpm, uint32_t& actual_rpm, SpindleState& configured_state, SpindleState& actual_state) override;
         bool request_configuration(const SpindleState* state, const uint32_t* rpm) override;
     };

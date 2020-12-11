@@ -41,9 +41,6 @@ namespace Spindles {
             uint32_t rpm;
         };
 
-        // Commands that return the status. Returns nullptr if unavailable by this VFD (default):
-        using response_parser = bool (*)(const uint8_t* response, VFD* spindle);
-
     private:
         static const int MAX_RETRIES            = 3;   // otherwise the spindle is marked 'unresponsive'
 
