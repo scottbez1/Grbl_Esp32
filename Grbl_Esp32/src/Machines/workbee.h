@@ -25,18 +25,8 @@
 
 #define MACHINE_NAME            "Workbee"
 
-// This cannot use homing because there are no switches
-#ifdef DEFAULT_HOMING_CYCLE_0
-    #undef DEFAULT_HOMING_CYCLE_0
-#endif
 
-#ifdef DEFAULT_HOMING_CYCLE_1
-    #undef DEFAULT_HOMING_CYCLE_1
-#endif
-
-// #define SPINDLE_TYPE    SpindleType::NONE
-
-
+// ***** IO *****
 #define X_STEP_PIN              GPIO_NUM_16
 #define X_DIRECTION_PIN         GPIO_NUM_17
 #define Y_STEP_PIN              GPIO_NUM_18
@@ -53,26 +43,71 @@
 #define VFD_RS485_RXD_PIN       GPIO_NUM_27
 #define VFD_RS485_RTS_PIN       GPIO_NUM_32
 #define VFD_RS485_ADDR          1
+#define DEFAULT_SPINDLE_RPM_MIN 8000.0
+#define DEFAULT_SPINDLE_RPM_MAX 24000.0
 
 // To debug RS485 spindle comms:
 // #define VFD_DEBUG_MODE
 
-
 #define X_LIMIT_PIN             GPIO_NUM_34
 #define Y_LIMIT_PIN             GPIO_NUM_35
+#define Y2_LIMIT_PIN            GPIO_NUM_4
 #define Z_LIMIT_PIN             GPIO_NUM_36
+#define DEFAULT_INVERT_LIMIT_PINS   0
 
-#define PROBE_PIN               GPIO_NUM_33
+// #define PROBE_PIN               GPIO_NUM_33
 
+// #define CONTROL_SAFETY_DOOR_PIN GPIO_NUM_39
+// #define CONTROL_RESET_PIN       GPIO_NUM_5
+// #define CONTROL_FEED_HOLD_PIN   GPIO_NUM_2
+// #define CONTROL_CYCLE_START_PIN GPIO_NUM_0
 
 // The default value in config.h is wrong for this controller
 #ifdef INVERT_CONTROL_PIN_MASK
     #undef INVERT_CONTROL_PIN_MASK
 #endif
-
 #define INVERT_CONTROL_PIN_MASK B1110
 
-#define CONTROL_SAFETY_DOOR_PIN GPIO_NUM_39
-// #define CONTROL_RESET_PIN       GPIO_NUM_5
-// #define CONTROL_FEED_HOLD_PIN   GPIO_NUM_2
-// #define CONTROL_CYCLE_START_PIN GPIO_NUM_0
+
+// ***** MACHINE BOUNDS *****
+#define DEFAULT_X_MAX_TRAVEL 800.0 // mm
+#define DEFAULT_Y_MAX_TRAVEL 1275.0 // mm
+#define DEFAULT_Z_MAX_TRAVEL 118.0 // mm
+
+#define DEFAULT_SOFT_LIMIT_ENABLE 1
+#define DEFAULT_HARD_LIMIT_ENABLE 1
+
+
+// ***** MOVEMENT *****
+// Invert Y axis
+#define DEFAULT_DIRECTION_INVERT_MASK 0b000010
+
+#define DEFAULT_X_STEPS_PER_MM 100.0
+#define DEFAULT_Y_STEPS_PER_MM 100.0
+#define DEFAULT_Z_STEPS_PER_MM 100.0
+
+#define DEFAULT_X_MAX_RATE 4000.0 // mm/min
+#define DEFAULT_Y_MAX_RATE 4000.0 // mm/min
+#define DEFAULT_Z_MAX_RATE 3000.0 // mm/min
+
+#define DEFAULT_X_ACCELERATION 500.0 // mm/sec^2
+#define DEFAULT_Y_ACCELERATION 500.0 // mm/sec^2
+#define DEFAULT_Z_ACCELERATION 100.0 // mm/sec^2
+
+
+#define PARKING_ENABLE  // Default disabled. Uncomment to enable
+#define PARKING_AXIS Z_AXIS                      // Define which axis that performs the parking motion
+
+
+#define DEFAULT_HOMING_ENABLE           1
+#define DEFAULT_HOMING_SQUARED_AXES     (bit(Y_AXIS))
+#define DEFAULT_HOMING_DIR_MASK         (bit(X_AXIS))
+#define DEFAULT_HOMING_FEED_RATE        100.0 // mm/min
+#define DEFAULT_HOMING_SEEK_RATE        1000.0 // mm/min
+#define DEFAULT_HOMING_DEBOUNCE_DELAY   25 // msec (0-65k)
+#define DEFAULT_HOMING_PULLOFF          2.0 // mm
+
+#define DEFAULT_HOMING_CYCLE_0 (bit(Z_AXIS))                // Raise Z before XY motion
+#define DEFAULT_HOMING_CYCLE_1 (bit(X_AXIS) | bit(Y_AXIS))  // Home X and Y simultaneously
+#define DEFAULT_HOMING_CYCLE_2 (bit(Y_AXIS))                // Sqaure the Y axis
+#define DEFAULT_HOMING_CYCLE_3 0
