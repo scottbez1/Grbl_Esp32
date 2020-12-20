@@ -67,6 +67,13 @@ void IRAM_ATTR isr_limit_switches() {
     }
 }
 
+void IRAM_ATTR isr_estop() {
+    mc_reset();                                // Initiate system kill.
+    sys_rt_exec_alarm = ExecAlarm::HardLimit;  // Indicate hard limit critical event
+    int evt;
+    xQueueSendFromISR(limit_sw_queue, &evt, NULL);
+}
+
 // Homes the specified cycle axes, sets the machine position, and performs a pull-off motion after
 // completing. Homing is a special motion case, which involves rapid uncontrolled stops to locate
 // the trigger point of the limit switches. The rapid stops are handled by a system level axis lock
@@ -294,6 +301,9 @@ void limits_init() {
                     5,  // priority
                     NULL);
     }
+
+    pinMode(ESTOP_PIN, INPUT);
+    attachInterrupt(ESTOP_PIN, isr_estop, CHANGE);
 }
 
 // Disables hard limits.
@@ -368,6 +378,11 @@ void limitCheckTask(void* pvParameters) {
         switch_state = limits_get_state();
         if (switch_state) {
             //grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Limit Switch State %08d", switch_state);
+            mc_reset();                                // Initiate system kill.
+            sys_rt_exec_alarm = ExecAlarm::HardLimit;  // Indicate hard limit critical event
+        }
+        if (digitalRead(ESTOP_PIN) == 1) {
+            grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "ESTOP!");
             mc_reset();                                // Initiate system kill.
             sys_rt_exec_alarm = ExecAlarm::HardLimit;  // Indicate hard limit critical event
         }

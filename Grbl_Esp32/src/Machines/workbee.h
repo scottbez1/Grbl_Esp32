@@ -36,7 +36,7 @@
 #define Z_STEP_PIN              GPIO_NUM_23
 #define Z_DIRECTION_PIN         GPIO_NUM_25
 
-#define STEPPERS_DISABLE_PIN    GPIO_NUM_13
+// #define STEPPERS_DISABLE_PIN    GPIO_NUM_
 
 #define SPINDLE_TYPE            SpindleType::HUANYANG
 #define VFD_RS485_TXD_PIN       GPIO_NUM_26
@@ -45,6 +45,8 @@
 #define VFD_RS485_ADDR          1
 #define DEFAULT_SPINDLE_RPM_MIN 8000.0
 #define DEFAULT_SPINDLE_RPM_MAX 24000.0
+#define DEFAULT_SPINDLE_DELAY_SPINUP 10000
+#define DEFAULT_SPINDLE_DELAY_SPINDOWN 5000
 
 // To debug RS485 spindle comms:
 // #define VFD_DEBUG_MODE
@@ -54,6 +56,8 @@
 #define Y2_LIMIT_PIN            GPIO_NUM_4
 #define Z_LIMIT_PIN             GPIO_NUM_36
 #define DEFAULT_INVERT_LIMIT_PINS   0
+
+#define ESTOP_PIN               GPIO_NUM_13
 
 // #define PROBE_PIN               GPIO_NUM_33
 
@@ -103,11 +107,11 @@
 #define DEFAULT_HOMING_SQUARED_AXES     (bit(Y_AXIS))
 #define DEFAULT_HOMING_DIR_MASK         (bit(X_AXIS))
 #define DEFAULT_HOMING_FEED_RATE        100.0 // mm/min
-#define DEFAULT_HOMING_SEEK_RATE        1000.0 // mm/min
+#define DEFAULT_HOMING_SEEK_RATE        2000.0 // mm/min
 #define DEFAULT_HOMING_DEBOUNCE_DELAY   25 // msec (0-65k)
-#define DEFAULT_HOMING_PULLOFF          2.0 // mm
+#define DEFAULT_HOMING_PULLOFF          1.0 // mm
 
-#define DEFAULT_HOMING_CYCLE_0 (bit(Z_AXIS))                // Raise Z before XY motion
-#define DEFAULT_HOMING_CYCLE_1 (bit(X_AXIS) | bit(Y_AXIS))  // Home X and Y simultaneously
-#define DEFAULT_HOMING_CYCLE_2 (bit(Y_AXIS))                // Sqaure the Y axis
+#define DEFAULT_HOMING_CYCLE_0 (bit(Z_AXIS))  // Raise/home Z before XY motion
+#define DEFAULT_HOMING_CYCLE_1 (bit(X_AXIS))  // Home X
+#define DEFAULT_HOMING_CYCLE_2 (bit(Y_AXIS))  // Home and sqaure the Y axis (must be done separately from X for squaring)
 #define DEFAULT_HOMING_CYCLE_3 0
