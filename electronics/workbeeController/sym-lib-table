@@ -1,0 +1,5 @@
+(sym_lib_table
+  (lib (name ESP32Modules)(type Legacy)(uri ${KIPRJMOD}/lib/ESP32Modules.lib)(options "")(descr ""))
+  (lib (name 74HC165)(type Legacy)(uri ${KIPRJMOD}/lib/74HC165.lib)(options "")(descr ""))
+  (lib (name BuckModule)(type Legacy)(uri ${KIPRJMOD}/lib/BuckModule.lib)(options "")(descr ""))
+)
