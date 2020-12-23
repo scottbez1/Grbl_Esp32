@@ -25,6 +25,9 @@ void grbl_init() {
 #ifdef USE_I2S_OUT
     i2s_out_init();  // The I2S out must be initialized before it can access the expanded GPIO port
 #endif
+#ifdef USE_SPI_IN
+    spi_in_init();
+#endif
     WiFi.persistent(false);
     WiFi.disconnect(true);
     WiFi.enableSTA(false);

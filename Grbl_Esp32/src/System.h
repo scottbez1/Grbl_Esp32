@@ -126,6 +126,9 @@ union ControlPins {
     ControlPinBits bit;
 };
 
+// Task notification bit values for the system notify task
+#define SYSTEM_NOTIFY_VALUE_CONTROL_CHANGE (1 << 0)  // Indicates the state of control inputs may have changed
+
 // NOTE: These position variables may need to be declared as volatiles, if problems arise.
 extern int32_t sys_position[MAX_N_AXIS];        // Real-time machine (aka home) position vector in steps.
 extern int32_t sys_probe_position[MAX_N_AXIS];  // Last probe position in machine coordinates and steps.
@@ -141,6 +144,8 @@ extern volatile bool          cycle_stop;
 #ifdef DEBUG
 extern volatile bool sys_rt_exec_debug;
 #endif
+
+extern volatile TaskHandle_t system_notify_task;
 
 void system_ini();  // Renamed from system_init() due to conflict with esp32 files
 
@@ -166,6 +171,7 @@ float system_convert_axis_steps_to_mpos(int32_t* steps, uint8_t idx);
 // Updates a machine 'position' array based on the 'step' array sent.
 void system_convert_array_steps_to_mpos(float* position, int32_t* steps);
 
+void systemNotifyTask(void* pvParameters);
 // A task that runs after a control switch interrupt for debouncing.
 void controlCheckTask(void* pvParameters);
 void system_exec_control_pin(ControlPins pins);

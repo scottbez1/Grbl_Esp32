@@ -25,46 +25,60 @@
 
 #define MACHINE_NAME            "Workbee"
 
+// I2S (steppers & other output-only pins)
+#define USE_I2S_OUT
+#define USE_I2S_STEPS
+#define I2S_OUT_BCK             GPIO_NUM_25
+#define I2S_OUT_WS              GPIO_NUM_12
+#define I2S_OUT_DATA            GPIO_NUM_13
+
+
+#define USE_SPI_IN
+#define SPI_IN_CLOCK            GPIO_NUM_15
+#define SPI_IN_DATA             GPIO_NUM_38
+#define SPI_IN_LATCH            GPIO_NUM_27
+#define SPI_IN_CLOCK_SPEED_HZ   8000000
+#define SPI_IN_DMA_CHANNEL      1
+#define SPI_IN_HOST             HSPI_HOST // Note: must use HSPI to avoid conflict with ST7789 driver which uses VSPI
 
 // ***** IO *****
-#define X_STEP_PIN              GPIO_NUM_16
-#define X_DIRECTION_PIN         GPIO_NUM_17
-#define Y_STEP_PIN              GPIO_NUM_18
-#define Y_DIRECTION_PIN         GPIO_NUM_19
-#define Y2_STEP_PIN             GPIO_NUM_21
-#define Y2_DIRECTION_PIN        GPIO_NUM_22
-#define Z_STEP_PIN              GPIO_NUM_23
-#define Z_DIRECTION_PIN         GPIO_NUM_25
+#define X_STEP_PIN              I2SO(0)
+#define X_DIRECTION_PIN         I2SO(1)
+#define Y_STEP_PIN              I2SO(2)
+#define Y_DIRECTION_PIN         I2SO(3)
+#define Y2_STEP_PIN             I2SO(4)
+#define Y2_DIRECTION_PIN        I2SO(5)
+#define Z_STEP_PIN              I2SO(6)
+#define Z_DIRECTION_PIN         I2SO(7)
 
-// #define STEPPERS_DISABLE_PIN    GPIO_NUM_
-
-#define SPINDLE_TYPE            SpindleType::HUANYANG
-#define VFD_RS485_TXD_PIN       GPIO_NUM_26
-#define VFD_RS485_RXD_PIN       GPIO_NUM_27
-#define VFD_RS485_RTS_PIN       GPIO_NUM_32
-#define VFD_RS485_ADDR          1
-#define DEFAULT_SPINDLE_RPM_MIN 8000.0
-#define DEFAULT_SPINDLE_RPM_MAX 24000.0
-#define DEFAULT_SPINDLE_DELAY_SPINUP 10000
-#define DEFAULT_SPINDLE_DELAY_SPINDOWN 5000
+#define SPINDLE_TYPE                    SpindleType::HUANYANG
+#define VFD_RS485_TXD_PIN               GPIO_NUM_32
+#define VFD_RS485_RXD_PIN               GPIO_NUM_39
+#define VFD_RS485_RTS_PIN               GPIO_NUM_33
+#define VFD_RS485_ADDR                  1
+#define DEFAULT_SPINDLE_RPM_MIN         8000.0
+#define DEFAULT_SPINDLE_RPM_MAX         24000.0
+#define DEFAULT_SPINDLE_DELAY_SPINUP    10000
+#define DEFAULT_SPINDLE_DELAY_SPINDOWN  5000
 
 // To debug RS485 spindle comms:
 // #define VFD_DEBUG_MODE
 
-#define X_LIMIT_PIN             GPIO_NUM_34
-#define Y_LIMIT_PIN             GPIO_NUM_35
-#define Y2_LIMIT_PIN            GPIO_NUM_4
-#define Z_LIMIT_PIN             GPIO_NUM_36
+#define X_LIMIT_PIN                 GPIO_NUM_17
+#define Y_LIMIT_PIN                 GPIO_NUM_21
+#define Y2_LIMIT_PIN                GPIO_NUM_22
+#define Z_LIMIT_PIN                 GPIO_NUM_2
 #define DEFAULT_INVERT_LIMIT_PINS   0
 
-#define ESTOP_PIN               GPIO_NUM_13
+#define ESTOP_PIN                   GPIO_NUM_13
 
-// #define PROBE_PIN               GPIO_NUM_33
+#define PROBE_PIN                   GPIO_NUM_36
 
-// #define CONTROL_SAFETY_DOOR_PIN GPIO_NUM_39
-// #define CONTROL_RESET_PIN       GPIO_NUM_5
-// #define CONTROL_FEED_HOLD_PIN   GPIO_NUM_2
-// #define CONTROL_CYCLE_START_PIN GPIO_NUM_0
+
+#define CONTROL_SAFETY_DOOR_PIN     SPII(0)
+#define CONTROL_RESET_PIN           SPII(1)
+#define CONTROL_FEED_HOLD_PIN       SPII(2)
+#define CONTROL_CYCLE_START_PIN     SPII(3)
 
 // The default value in config.h is wrong for this controller
 #ifdef INVERT_CONTROL_PIN_MASK

@@ -87,6 +87,7 @@ const char* const GRBL_VERSION_BUILD = "20201212";
 #endif
 
 #include "I2SOut.h"
+#include "SPIIn.h"
 
 void grbl_init();
 void run_once();

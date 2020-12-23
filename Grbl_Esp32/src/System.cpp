@@ -40,6 +40,7 @@ volatile Percent sys_rt_s_override;  // Global realtime executor spindle overrid
 UserOutput::AnalogOutput*  myAnalogOutputs[MaxUserDigitalPin];
 UserOutput::DigitalOutput* myDigitalOutputs[MaxUserDigitalPin];
 
+volatile TaskHandle_t system_notify_task;
 xQueueHandle control_sw_queue;    // used by control switch debouncing
 bool         debouncing = false;  // debouncing in process
 
@@ -109,6 +110,39 @@ void system_ini() {  // Renamed from system_init() due to conflict with esp32 fi
     myAnalogOutputs[1] = new UserOutput::AnalogOutput(1, USER_ANALOG_PIN_1, USER_ANALOG_PIN_1_FREQ);
     myAnalogOutputs[2] = new UserOutput::AnalogOutput(2, USER_ANALOG_PIN_2, USER_ANALOG_PIN_2_FREQ);
     myAnalogOutputs[3] = new UserOutput::AnalogOutput(3, USER_ANALOG_PIN_3, USER_ANALOG_PIN_3_FREQ);
+
+
+    // setup task used for notifying the system from another core/task
+    TaskHandle_t task = nullptr;
+    assert(xTaskCreatePinnedToCore(systemNotifyTask,
+                "systemNotifyTask",
+                2048,
+                NULL,
+                5,  // priority
+                &task,
+                SUPPORT_TASK_CORE) == pdPASS);
+    system_notify_task = task;
+}
+
+void systemNotifyTask(void* pvParameters) {
+    uint32_t notifyValue;
+    while (true) {
+        if (xTaskNotifyWait(
+                0x00,           /* Don’t clear any notification bits on entry. */
+                ULONG_MAX,      /* Reset the notification value to 0 on exit. */
+                &notifyValue,   /* Notified value passed out. */
+                portMAX_DELAY   /* Block indefinitely. */
+                )) {
+            if ((notifyValue & SYSTEM_NOTIFY_VALUE_CONTROL_CHANGE) != 0) {
+                ControlPins pins = system_control_get_state();
+                system_exec_control_pin(pins);
+            }
+        }
+        static UBaseType_t uxHighWaterMark = 0;
+#    ifdef DEBUG_TASK_STACK
+        reportTaskStackSize(uxHighWaterMark);
+#    endif
+    }
 }
 
 #ifdef ENABLE_CONTROL_SW_DEBOUNCE
