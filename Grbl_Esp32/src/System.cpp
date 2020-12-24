@@ -118,7 +118,7 @@ void system_ini() {  // Renamed from system_init() due to conflict with esp32 fi
                 "systemNotifyTask",
                 2048,
                 NULL,
-                5,  // priority
+                2,  // priority
                 &task,
                 SUPPORT_TASK_CORE) == pdPASS);
     system_notify_task = task;

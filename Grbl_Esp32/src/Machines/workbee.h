@@ -25,6 +25,9 @@
 
 #define MACHINE_NAME            "Workbee"
 
+#define USE_MACHINE_INIT
+
+
 // I2S (steppers & other output-only pins)
 #define USE_I2S_OUT
 #define USE_I2S_STEPS
