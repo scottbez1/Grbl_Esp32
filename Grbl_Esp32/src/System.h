@@ -127,7 +127,8 @@ union ControlPins {
 };
 
 // Task notification bit values for the system notify task
-#define SYSTEM_NOTIFY_VALUE_CONTROL_CHANGE (1 << 0)  // Indicates the state of control inputs may have changed
+#define SYSTEM_NOTIFY_VALUE_CONTROL_CHANGE (1 << 0)     // Indicates the state of control inputs may have changed
+#define SYSTEM_NOTIFY_VALUE_LIMIT_CHANGE (1 << 1)       // Indicates the state of limit inputs may have changed
 
 // NOTE: These position variables may need to be declared as volatiles, if problems arise.
 extern int32_t sys_position[MAX_N_AXIS];        // Real-time machine (aka home) position vector in steps.

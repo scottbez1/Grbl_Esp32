@@ -133,9 +133,13 @@ void systemNotifyTask(void* pvParameters) {
                 &notifyValue,   /* Notified value passed out. */
                 portMAX_DELAY   /* Block indefinitely. */
                 )) {
+            
+            grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "NOTIFY %u", notifyValue);
             if ((notifyValue & SYSTEM_NOTIFY_VALUE_CONTROL_CHANGE) != 0) {
-                ControlPins pins = system_control_get_state();
-                system_exec_control_pin(pins);
+                isr_control_inputs();
+            }
+            if ((notifyValue & SYSTEM_NOTIFY_VALUE_LIMIT_CHANGE) != 0) {
+                isr_limit_switches();
             }
         }
         static UBaseType_t uxHighWaterMark = 0;

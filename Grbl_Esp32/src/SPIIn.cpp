@@ -19,7 +19,7 @@
     You should have received a copy of the GNU General Public License
     along with Grbl_ESP32.  If not, see <http://www.gnu.org/licenses/>.
 */
-#include "Config.h"
+#include "Grbl.h"
 
 // This block of #includes is necessary for Report.h
 #include "Error.h"
@@ -53,6 +53,65 @@ static atomic_uint_least32_t spi_in_data = ATOMIC_VAR_INIT(0);
 // SPI Task state
 static spi_device_handle_t spi_rx;
 static spi_transaction_t spi_rx_transaction;
+
+#if (defined(CONTROL_SAFETY_DOOR_PIN) && (CONTROL_SAFETY_DOOR_PIN >= SPI_IN_PIN_BASE) && (CONTROL_SAFETY_DOOR_PIN < I2S_OUT_PIN_BASE))
+#   define CONTROL_SAFETY_DOOR_MASK (1 << (CONTROL_SAFETY_DOOR_PIN - SPI_IN_PIN_BASE))
+#else
+#   define CONTROL_SAFETY_DOOR_MASK 0
+#endif
+#if (defined(CONTROL_RESET_PIN) && (CONTROL_RESET_PIN >= SPI_IN_PIN_BASE) && (CONTROL_RESET_PIN < I2S_OUT_PIN_BASE))
+#   define CONTROL_RESET_MASK (1 << (CONTROL_RESET_PIN - SPI_IN_PIN_BASE))
+#else
+#   define CONTROL_RESET_MASK 0
+#endif
+#if (defined(CONTROL_FEED_HOLD_PIN) && (CONTROL_FEED_HOLD_PIN >= SPI_IN_PIN_BASE) && (CONTROL_FEED_HOLD_PIN < I2S_OUT_PIN_BASE))
+#   define CONTROL_FEED_HOLD_MASK (1 << (CONTROL_FEED_HOLD_PIN - SPI_IN_PIN_BASE))
+#else
+#   define CONTROL_FEED_HOLD_MASK 0
+#endif
+#if (defined(CONTROL_CYCLE_START_PIN) && (CONTROL_CYCLE_START_PIN >= SPI_IN_PIN_BASE) && (CONTROL_CYCLE_START_PIN < I2S_OUT_PIN_BASE))
+#   define CONTROL_CYCLE_START_MASK (1 << (CONTROL_CYCLE_START_PIN - SPI_IN_PIN_BASE))
+#else
+#   define CONTROL_CYCLE_START_MASK 0
+#endif
+#if (defined(MACRO_BUTTON_0_PIN) && (MACRO_BUTTON_0_PIN >= SPI_IN_PIN_BASE) && (MACRO_BUTTON_0_PIN < I2S_OUT_PIN_BASE))
+#   define MACRO_BUTTON_0_MASK (1 << (MACRO_BUTTON_0_PIN - SPI_IN_PIN_BASE))
+#else
+#   define MACRO_BUTTON_0_MASK 0
+#endif
+#if (defined(MACRO_BUTTON_1_PIN) && (MACRO_BUTTON_1_PIN >= SPI_IN_PIN_BASE) && (MACRO_BUTTON_1_PIN < I2S_OUT_PIN_BASE))
+#   define MACRO_BUTTON_1_MASK (1 << (MACRO_BUTTON_1_PIN - SPI_IN_PIN_BASE))
+#else
+#   define MACRO_BUTTON_1_MASK 0
+#endif
+#if (defined(MACRO_BUTTON_2_PIN) && (MACRO_BUTTON_2_PIN >= SPI_IN_PIN_BASE) && (MACRO_BUTTON_2_PIN < I2S_OUT_PIN_BASE))
+#   define MACRO_BUTTON_2_MASK (1 << (MACRO_BUTTON_2_PIN - SPI_IN_PIN_BASE))
+#else
+#   define MACRO_BUTTON_2_MASK 0
+#endif
+#if (defined(MACRO_BUTTON_3_PIN) && (MACRO_BUTTON_3_PIN >= SPI_IN_PIN_BASE) && (MACRO_BUTTON_3_PIN < I2S_OUT_PIN_BASE))
+#   define MACRO_BUTTON_3_MASK (1 << (MACRO_BUTTON_3_PIN - SPI_IN_PIN_BASE))
+#else
+#   define MACRO_BUTTON_3_MASK 0
+#endif
+
+#define CONTROL_SPI_MASK (CONTROL_SAFETY_DOOR_MASK | CONTROL_RESET_MASK | CONTROL_FEED_HOLD_MASK | CONTROL_CYCLE_START_MASK | \
+    MACRO_BUTTON_0_MASK | MACRO_BUTTON_1_MASK | MACRO_BUTTON_2_MASK | MACRO_BUTTON_3_MASK)
+
+
+#define LIMIT_SPI_MASK ( \
+    (((X_LIMIT_PIN >= SPI_IN_PIN_BASE)  && (X_LIMIT_PIN < I2S_OUT_PIN_BASE)) ? (1 << (X_LIMIT_PIN - SPI_IN_PIN_BASE)) : 0) | \
+    (((Y_LIMIT_PIN >= SPI_IN_PIN_BASE)  && (Y_LIMIT_PIN < I2S_OUT_PIN_BASE)) ? (1 << (Y_LIMIT_PIN - SPI_IN_PIN_BASE)) : 0) | \
+    (((Z_LIMIT_PIN >= SPI_IN_PIN_BASE)  && (Z_LIMIT_PIN < I2S_OUT_PIN_BASE)) ? (1 << (Z_LIMIT_PIN - SPI_IN_PIN_BASE)) : 0) | \
+    (((A_LIMIT_PIN >= SPI_IN_PIN_BASE)  && (A_LIMIT_PIN < I2S_OUT_PIN_BASE)) ? (1 << (A_LIMIT_PIN - SPI_IN_PIN_BASE)) : 0) | \
+    (((B_LIMIT_PIN >= SPI_IN_PIN_BASE)  && (B_LIMIT_PIN < I2S_OUT_PIN_BASE)) ? (1 << (B_LIMIT_PIN - SPI_IN_PIN_BASE)) : 0) | \
+    (((C_LIMIT_PIN >= SPI_IN_PIN_BASE)  && (C_LIMIT_PIN < I2S_OUT_PIN_BASE)) ? (1 << (C_LIMIT_PIN - SPI_IN_PIN_BASE)) : 0) | \
+    (((X2_LIMIT_PIN >= SPI_IN_PIN_BASE) && (X2_LIMIT_PIN < I2S_OUT_PIN_BASE)) ? (1 << (X2_LIMIT_PIN - SPI_IN_PIN_BASE)) : 0) | \
+    (((Y2_LIMIT_PIN >= SPI_IN_PIN_BASE) && (Y2_LIMIT_PIN < I2S_OUT_PIN_BASE)) ? (1 << (Y2_LIMIT_PIN - SPI_IN_PIN_BASE)) : 0) | \
+    (((Z2_LIMIT_PIN >= SPI_IN_PIN_BASE) && (Z2_LIMIT_PIN < I2S_OUT_PIN_BASE)) ? (1 << (Z2_LIMIT_PIN - SPI_IN_PIN_BASE)) : 0) | \
+    (((A2_LIMIT_PIN >= SPI_IN_PIN_BASE) && (A2_LIMIT_PIN < I2S_OUT_PIN_BASE)) ? (1 << (A2_LIMIT_PIN - SPI_IN_PIN_BASE)) : 0) | \
+    (((B2_LIMIT_PIN >= SPI_IN_PIN_BASE) && (B2_LIMIT_PIN < I2S_OUT_PIN_BASE)) ? (1 << (B2_LIMIT_PIN - SPI_IN_PIN_BASE)) : 0) | \
+    (((C2_LIMIT_PIN >= SPI_IN_PIN_BASE) && (C2_LIMIT_PIN < I2S_OUT_PIN_BASE)) ? (1 << (C2_LIMIT_PIN - SPI_IN_PIN_BASE)) : 0))
 
 
 static void spi_in_latch(spi_transaction_t *trans) {
@@ -120,21 +179,17 @@ static void spiInTask(void* parameter) {
         atomic_store(&spi_in_data, data);
 
         if (data != last_data) {
+            uint32_t change = data ^ last_data;
             // In lieu of interrupts, push to the main core via the system notify task if any of the control inputs were set to SPII
-#if (\
-    (defined(CONTROL_SAFETY_DOOR_PIN)   && (CONTROL_SAFETY_DOOR_PIN >= SPI_IN_PIN_BASE) && (CONTROL_SAFETY_DOOR_PIN < I2S_OUT_PIN_BASE)) || \
-    (defined(CONTROL_RESET_PIN)         && (CONTROL_RESET_PIN >= SPI_IN_PIN_BASE)       && (CONTROL_RESET_PIN < I2S_OUT_PIN_BASE)) || \
-    (defined(CONTROL_FEED_HOLD_PIN)     && (CONTROL_FEED_HOLD_PIN >= SPI_IN_PIN_BASE)   && (CONTROL_FEED_HOLD_PIN < I2S_OUT_PIN_BASE)) || \
-    (defined(CONTROL_CYCLE_START_PIN)   && (CONTROL_CYCLE_START_PIN >= SPI_IN_PIN_BASE) && (CONTROL_CYCLE_START_PIN < I2S_OUT_PIN_BASE)) || \
-    (defined(MACRO_BUTTON_0_PIN)        && (MACRO_BUTTON_0_PIN >= SPI_IN_PIN_BASE)      && (MACRO_BUTTON_0_PIN < I2S_OUT_PIN_BASE)) || \
-    (defined(MACRO_BUTTON_1_PIN)        && (MACRO_BUTTON_1_PIN >= SPI_IN_PIN_BASE)      && (MACRO_BUTTON_1_PIN < I2S_OUT_PIN_BASE)) || \
-    (defined(MACRO_BUTTON_2_PIN)        && (MACRO_BUTTON_2_PIN >= SPI_IN_PIN_BASE)      && (MACRO_BUTTON_2_PIN < I2S_OUT_PIN_BASE)) || \
-    (defined(MACRO_BUTTON_3_PIN)        && (MACRO_BUTTON_3_PIN >= SPI_IN_PIN_BASE)      && (MACRO_BUTTON_3_PIN < I2S_OUT_PIN_BASE)) \
-    )
             if (system_notify_task != nullptr) {
-                xTaskNotify(system_notify_task, SYSTEM_NOTIFY_VALUE_CONTROL_CHANGE, eSetBits);
+                grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "change: %08x, control: %08x, limit: %08x", change, CONTROL_SPI_MASK, LIMIT_SPI_MASK);
+                if ((change & CONTROL_SPI_MASK) > 0) {
+                    xTaskNotify(system_notify_task, SYSTEM_NOTIFY_VALUE_CONTROL_CHANGE, eSetBits);
+                }
+                if ((change & LIMIT_SPI_MASK) > 0) {
+                    xTaskNotify(system_notify_task, SYSTEM_NOTIFY_VALUE_LIMIT_CHANGE, eSetBits);
+                }
             }
-#endif
             last_data = data;
         }
         static UBaseType_t uxHighWaterMark = 0;
@@ -142,7 +197,7 @@ static void spiInTask(void* parameter) {
         reportTaskStackSize(uxHighWaterMark);
 #    endif
 
-        vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
 

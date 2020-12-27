@@ -7,7 +7,12 @@
 #    include CUSTOM_CODE_FILENAME
 #endif
 
+#include "driver/pcnt.h"
+
 #include <TFT_eSPI.h>
+
+
+static uint32_t flow_pulses_per_second = 0;
 
 // Note: Display pinout is specified in platformio.ini
 static TFT_eSPI display_tft = TFT_eSPI();
@@ -79,63 +84,113 @@ void displayTask(void * pvParameters) {
         ControlPins ctrl_pin_state = system_control_get_state();
         bool        prb_pin_state  = probe_get_state();
         if (lim_pin_state || ctrl_pin_state.value || prb_pin_state) {
-            strcat(status, "|Pn:");
+            strncat(buf, "\nPn:", sizeof(buf));
             if (prb_pin_state) {
-                strcat(status, "P");
+                strncat(buf, "P", sizeof(buf));
             }
             if (lim_pin_state) {
                 auto n_axis = number_axis->get();
                 if (n_axis >= 1 && bit_istrue(lim_pin_state, bit(X_AXIS))) {
-                    strcat(status, "X");
+                    strncat(buf, "X", sizeof(buf));
                 }
                 if (n_axis >= 2 && bit_istrue(lim_pin_state, bit(Y_AXIS))) {
-                    strcat(status, "Y");
+                    strncat(buf, "Y", sizeof(buf));
                 }
                 if (n_axis >= 3 && bit_istrue(lim_pin_state, bit(Z_AXIS))) {
-                    strcat(status, "Z");
+                    strncat(buf, "Z", sizeof(buf));
                 }
                 if (n_axis >= 4 && bit_istrue(lim_pin_state, bit(A_AXIS))) {
-                    strcat(status, "A");
+                    strncat(buf, "A", sizeof(buf));
                 }
                 if (n_axis >= 5 && bit_istrue(lim_pin_state, bit(B_AXIS))) {
-                    strcat(status, "B");
+                    strncat(buf, "B", sizeof(buf));
                 }
                 if (n_axis >= 6 && bit_istrue(lim_pin_state, bit(C_AXIS))) {
-                    strcat(status, "C");
+                    strncat(buf, "C", sizeof(buf));
                 }
             }
             if (ctrl_pin_state.value) {
                 if (ctrl_pin_state.bit.safetyDoor) {
-                    strcat(status, "D");
+                    strncat(buf, "Door", sizeof(buf));
                 }
                 if (ctrl_pin_state.bit.reset) {
-                    strcat(status, "R");
+                    strncat(buf, "Res", sizeof(buf));
                 }
                 if (ctrl_pin_state.bit.feedHold) {
-                    strcat(status, "H");
+                    strncat(buf, "Hold", sizeof(buf));
                 }
                 if (ctrl_pin_state.bit.cycleStart) {
-                    strcat(status, "S");
+                    strncat(buf, "Sta", sizeof(buf));
                 }
                 if (ctrl_pin_state.bit.macro0) {
-                    strcat(status, "0");
+                    strncat(buf, "0", sizeof(buf));
                 }
                 if (ctrl_pin_state.bit.macro1) {
-                    strcat(status, "1");
+                    strncat(buf, "1", sizeof(buf));
                 }
                 if (ctrl_pin_state.bit.macro2) {
-                    strcat(status, "2");
+                    strncat(buf, "2", sizeof(buf));
                 }
                 if (ctrl_pin_state.bit.macro3) {
-                    strcat(status, "3");
+                    strncat(buf, "3", sizeof(buf));
                 }
             }
         }
-        
-        display_sprite.printf("%s", buf);
+
+        display_sprite.printf("%s\n%u", buf, flow_pulses_per_second);
 
         display_sprite.pushSprite(0, 0);
         vTaskDelay(pdMS_TO_TICKS(50));
+    }
+}
+
+void pulseTask(void * pvParameters) {
+    /* Prepare configuration for the PCNT unit */
+    pcnt_config_t pcnt_config = {
+        // Set PCNT input signal and control GPIOs
+        .pulse_gpio_num = SPINDLE_COOLANT_FLOW_PULSE_PIN,
+        .ctrl_gpio_num = -1,
+        // What to do when control input is low or high?
+        .lctrl_mode = PCNT_MODE_KEEP,    // Keep the primary counter mode if low
+        .hctrl_mode = PCNT_MODE_KEEP,    // Keep the primary counter mode if high
+        // What to do on the positive / negative edge of pulse input?
+        .pos_mode = PCNT_COUNT_INC,   // Count up on the positive edge
+        .neg_mode = PCNT_COUNT_DIS,   // Keep the counter value on the negative edge
+        // Set the maximum and minimum limit values to watch
+        .counter_h_lim = INT16_MAX,
+        .counter_l_lim = INT16_MIN,
+        .unit = SPINDLE_COOLANT_FLOW_PULSE_UNIT,
+        .channel = PCNT_CHANNEL_0,
+    };
+    /* Initialize PCNT unit */
+    pcnt_unit_config(&pcnt_config);
+
+    /* Configure and enable the input filter */
+    pcnt_set_filter_value(SPINDLE_COOLANT_FLOW_PULSE_UNIT, 100);
+    pcnt_filter_enable(SPINDLE_COOLANT_FLOW_PULSE_UNIT);
+
+    /* Initialize PCNT's counter */
+    pcnt_counter_pause(SPINDLE_COOLANT_FLOW_PULSE_UNIT);
+    pcnt_counter_clear(SPINDLE_COOLANT_FLOW_PULSE_UNIT);
+
+    /* Everything is set up, now go to counting */
+    pcnt_counter_resume(SPINDLE_COOLANT_FLOW_PULSE_UNIT);
+
+    unsigned long last_reading = millis();
+    int16_t pulse_count = 0;
+    while (1) {
+        unsigned long now = millis();
+        pcnt_get_counter_value(SPINDLE_COOLANT_FLOW_PULSE_UNIT, &pulse_count);
+        pcnt_counter_clear(SPINDLE_COOLANT_FLOW_PULSE_UNIT);
+
+        uint32_t delta = now - last_reading;
+        last_reading = now;
+
+        if (delta > 0) {
+            flow_pulses_per_second = pulse_count * 1000  / delta;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(500));
     }
 }
 
@@ -144,6 +199,15 @@ void machine_init() {
             displayTask,         // task
             "DisplayTask",  // name for task
             2048,                 // size of task stack
+            nullptr,                 // parameters
+            1,                    // priority
+            nullptr,
+            0  // off the main core (1) - see SUPPORT_TASK_CORE
+            ) == pdPASS);
+    assert(xTaskCreatePinnedToCore(
+            pulseTask,         // task
+            "PulseTask",  // name for task
+            1024,                 // size of task stack
             nullptr,                 // parameters
             1,                    // priority
             nullptr,

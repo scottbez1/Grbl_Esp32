@@ -40,9 +40,12 @@
 #define SPI_IN_CLOCK            GPIO_NUM_15
 #define SPI_IN_DATA             GPIO_NUM_38
 #define SPI_IN_LATCH            GPIO_NUM_27
-#define SPI_IN_CLOCK_SPEED_HZ   8000000
+#define SPI_IN_CLOCK_SPEED_HZ   4000000
 #define SPI_IN_DMA_CHANNEL      1
 #define SPI_IN_HOST             HSPI_HOST // Note: must use HSPI to avoid conflict with ST7789 driver which uses VSPI
+
+// #define ENABLE_CONTROL_SW_DEBOUNCE
+// #define ENABLE_SOFTWARE_DEBOUNCE
 
 // ***** IO *****
 #define X_STEP_PIN              I2SO(0)
@@ -64,24 +67,27 @@
 #define DEFAULT_SPINDLE_DELAY_SPINUP    10000
 #define DEFAULT_SPINDLE_DELAY_SPINDOWN  5000
 
+#define SPINDLE_COOLANT_FLOW_PULSE_PIN  GPIO_NUM_37
+#define SPINDLE_COOLANT_FLOW_PULSE_UNIT PCNT_UNIT_0
+
 // To debug RS485 spindle comms:
 // #define VFD_DEBUG_MODE
 
-#define X_LIMIT_PIN                 GPIO_NUM_17
-#define Y_LIMIT_PIN                 GPIO_NUM_21
-#define Y2_LIMIT_PIN                GPIO_NUM_22
-#define Z_LIMIT_PIN                 GPIO_NUM_2
+#define X_LIMIT_PIN                 SPII(0)
+#define Y_LIMIT_PIN                 SPII(1)
+#define Y2_LIMIT_PIN                SPII(2)
+#define Z_LIMIT_PIN                 SPII(3)
 #define DEFAULT_INVERT_LIMIT_PINS   0
 
-#define ESTOP_PIN                   GPIO_NUM_13
+#define ESTOP_PIN                   GPIO_NUM_26
 
 #define PROBE_PIN                   GPIO_NUM_36
 
 
-#define CONTROL_SAFETY_DOOR_PIN     SPII(0)
-#define CONTROL_RESET_PIN           SPII(1)
-#define CONTROL_FEED_HOLD_PIN       SPII(2)
-#define CONTROL_CYCLE_START_PIN     SPII(3)
+#define CONTROL_SAFETY_DOOR_PIN     SPII(4)
+#define CONTROL_RESET_PIN           SPII(5)
+#define CONTROL_FEED_HOLD_PIN       SPII(6)
+#define CONTROL_CYCLE_START_PIN     SPII(7)
 
 // The default value in config.h is wrong for this controller
 #ifdef INVERT_CONTROL_PIN_MASK
@@ -96,7 +102,7 @@
 #define DEFAULT_Z_MAX_TRAVEL 118.0 // mm
 
 #define DEFAULT_SOFT_LIMIT_ENABLE 1
-#define DEFAULT_HARD_LIMIT_ENABLE 1
+#define DEFAULT_HARD_LIMIT_ENABLE 0
 
 
 // ***** MOVEMENT *****
@@ -126,7 +132,7 @@
 #define DEFAULT_HOMING_FEED_RATE        100.0 // mm/min
 #define DEFAULT_HOMING_SEEK_RATE        2000.0 // mm/min
 #define DEFAULT_HOMING_DEBOUNCE_DELAY   25 // msec (0-65k)
-#define DEFAULT_HOMING_PULLOFF          1.0 // mm
+#define DEFAULT_HOMING_PULLOFF          2.0 // mm
 
 #define DEFAULT_HOMING_CYCLE_0 (bit(Z_AXIS))  // Raise/home Z before XY motion
 #define DEFAULT_HOMING_CYCLE_1 (bit(X_AXIS))  // Home X
