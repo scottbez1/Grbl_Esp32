@@ -1,0 +1,6 @@
+(fp_lib_table
+  (lib (name ESP32)(type KiCad)(uri ${KIPRJMOD}/lib/ESP32.pretty)(options "")(descr ""))
+  (lib (name LevelShifterModule)(type KiCad)(uri ${KIPRJMOD}/lib/LevelShifterModule.pretty)(options "")(descr ""))
+  (lib (name Buck)(type KiCad)(uri ${KIPRJMOD}/lib/Buck.pretty)(options "")(descr ""))
+  (lib (name ScrewTerminal)(type KiCad)(uri ${KIPRJMOD}/lib/ScrewTerminal.pretty)(options "")(descr ""))
+)
